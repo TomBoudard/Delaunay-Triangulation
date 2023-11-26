@@ -2,12 +2,8 @@
 #include <fstream>
 #include <string>
 #include <vector>
-
-struct point2D {
-    int index;
-    float x;
-    float y;
-};
+#include "point.cu"
+#include "sort_array.cu"
 
 std::vector<point2D> readFile(std::string nameFile){
     std::vector<point2D> pointsVector;
