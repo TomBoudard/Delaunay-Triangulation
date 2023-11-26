@@ -27,3 +27,15 @@ Example:
 0 1 3
 2 1 3
 ```
+
+## Data generation
+
+`./generate_points.py` can be used to generate a `.txt` input file for our algorithm.
+
+TODO: usage & different distributions
+
+## Visualization
+
+`./render_svg.py` can be used to generate a `.svg` output for a given dataset and triangles.
+
+Usage : `./render_svg.py coords_list trig_list`

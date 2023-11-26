@@ -2,6 +2,8 @@
 
 """Renders triangles in a svg file"""
 
+# NOTE : a better visualization with circumscribed circles could be done
+
 import sys
 import os
 
@@ -41,7 +43,7 @@ def render_svg(coords, trig):
         with open(trig, 'r') as t:
             for line in t:
                 line = list(map(int, line.split())) # line contains the triplet of indexes
-                o.write(add_trig(coords_list, line, min_val, width/100))
+                o.write(add_trig(coords_list, line, min_val, width/200))
         
         # End of image
         o.write(f"</svg>\n")
