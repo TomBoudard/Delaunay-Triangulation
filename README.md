@@ -1,12 +1,14 @@
-# Delaunay-Triangulation
+# Delaunay Triangulation
 
-TODO UPDATE THIS
+In this project, we implemented a parallel algorithm on GPU for Delaunay Triangulations based on [this paper](https://membres-ljk.imag.fr/Christophe.Picard/teaching/gp-gpu/References/lee-1997-IEEE.pdf).
+
+Tha algorithm is done with cuda. It takes an input file containing a list of 2D points and returns a list of triangles (refering to them as their indexes). The files specification can be found in the next section. The folder also contains Python scripts to generate datasets and svg visualizations of the results.
 
 ## Files specifications
 
-### Input
+### Input (List of points)
 
-`.txt` file containing lines of `x y` coordinates in floats.
+A text file containing lines of `x y` coordinates (floats).
 
 Example:
 ```
@@ -18,10 +20,10 @@ Example:
 
 ### Output (List of triangles)
 
-`.txt` file containing triplets of indexes for each triangle.
+A text file containing triplets of indexes for each triangle.
 
 Example:
 ```
-0 1 2
 0 1 3
+2 1 3
 ```
