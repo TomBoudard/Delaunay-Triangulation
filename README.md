@@ -32,7 +32,7 @@ Example:
 
 `./generate_points.py` can be used to generate a `.txt` input file for our algorithm.
 
-TODO: usage & different distributions
+Usage can be found with the help argument (`-h` or `--help`).
 
 ## Visualization
 
