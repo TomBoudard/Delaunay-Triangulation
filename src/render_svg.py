@@ -1,44 +1,59 @@
 #!/usr/bin/env python3
 
-"""Convertit une liste de triangles en une image svg"""
+"""Renders triangles in a svg file"""
 
 import sys
 import os
 
-# TODO modif
-largeur = 5
-hauteur = 5
-
-def render_svg(coords, trig):
+def get_coords_list(coords_file):
+    """Reads file containing every points and store them in an array"""
+    """Also returns min and max values (not separating axis)"""
 
     coords_list = []
+    min_val, max_val = None, None
 
-    with open(coords, 'r') as c:
+    with open(coords_file, 'r') as c:
         for line in c:
-            # Append each point to the list
-            coords_list.append(list(map(float, line.split())))
+            pt = list(map(float, line.split()))
+            coords_list.append(pt)
+
+            if min_val:
+                min_val = min(min_val, pt[0], pt[1])
+                max_val = max(max_val, pt[0], pt[1])
+            else:
+                min_val = min(pt[0], pt[1])
+                max_val = max(pt[0], pt[1])
+    
+    return coords_list, min_val, max_val
+
+def render_svg(coords, trig):
+    """Main function creating a svg file containing every triangle"""
+
+    coords_list, min_val, max_val = get_coords_list(coords)
+    width = max_val - min_val
 
     with open("output.svg", 'w') as o:
         # Beginning of image
-        o.write(f"<svg xmlns='http://www.w3.org/2000/svg' version='1.1' width='{largeur}"
-           f"' height='{hauteur}'>\n")
+        o.write(f"<svg xmlns='http://www.w3.org/2000/svg' version='1.1' width='{width}"
+           f"' height='{width}'>\n")
 
         # Write every triangle
         with open(trig, 'r') as t:
-            
             for line in t:
-                line = list(map(int, line.split())) # line contains the triplet
-                o.write(add_trig(coords_list, line))
+                line = list(map(int, line.split())) # line contains the triplet of indexes
+                o.write(add_trig(coords_list, line, min_val, width/100))
         
         # End of image
         o.write(f"</svg>\n")
 
-def add_trig(coords_list, line):
-    
-    for i in range(3):
-        line[i] = coords_list[line[i]]
+def add_trig(coords_list, line, offset, w):
+    """Returns svg string for a given triangle"""
 
-    return f'<polygon points="{line[0][0]},{line[0][1]} {line[1][0]},{line[1][1]} {line[2][0]},{line[2][1]}" style="fill:white;stroke:black;stroke-width:0.1" />\n'
+    # Get coordinates and offset them in the square so it's visible on svg
+    for i in range(3):
+        line[i] = [coords_list[line[i]][j] - offset for j in range(2)]
+
+    return f'<polygon points="{line[0][0]},{line[0][1]} {line[1][0]},{line[1][1]} {line[2][0]},{line[2][1]}" style="fill:white;stroke:black;stroke-width:{w}" />\n'
 
 if __name__=="__main__":
     if len(sys.argv) < 3 or sys.argv[1] in ["-h","--help"]:
