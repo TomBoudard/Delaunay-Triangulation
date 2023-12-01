@@ -3,8 +3,11 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 #include "point.cu"
 #include "sort_array.cu"
+
+using namespace std::chrono;
 
 //CPU Compare function
 bool xCompare (point2D a, point2D b){return a.x < b.x;}
@@ -31,13 +34,25 @@ int main(int argc, char *argv[]) {
 
     // TODO arguments reading and errors (filename, splitting method, ...)
 
+    if (argc < 2) {
+        std::cout << "Wrong number of arguments\n";
+        return 1;
+    }
+
     std::vector<point2D> pointsVector = readFile(argv[1]);
 
-    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+    // auto start = high_resolution_clock::now();
+    // std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+	// auto elapse = std::chrono::system_clock::now() - start;
+	// auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
 
-    for (int i = 0; i < pointsVector.size(); i++){
-        std::cout << "X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
-    }
+    point2D* res = sortInputIntoGPU(pointsVector);
+
+    // for (int i = 0; i < pointsVector.size(); i++){
+    //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    // }
+
+    cudaFree(res);
 
     return 0;
 }
