@@ -30,7 +30,7 @@ Example:
 
 ## Data generation
 
-`./generate_points.py` can be used to generate a `.txt` input file for our algorithm.
+`./generate_points.py` can be used to generate `input.txt` input file for our algorithm.
 
 Usage can be found with the help argument (`-h` or `--help`).
 
