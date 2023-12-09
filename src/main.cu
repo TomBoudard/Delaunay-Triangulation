@@ -6,6 +6,7 @@
 #include <chrono>
 #include "point.cu"
 #include "sort_array.cu"
+#include "projection.cu"
 
 using namespace std::chrono;
 
@@ -30,45 +31,6 @@ std::vector<point2D> readFile(std::string nameFile){
     
 }
 
-#define N 1024 // TODO WHICH VALUE?
-
-__global__ void test(point2D *pts, unsigned int refPointIndex) {
-    point2D* localPoint = &pts[(blockIdx.x*N + threadIdx.x)];
-
-    float old_x = localPoint->x;
-    float old_y = localPoint->y;
-    
-    float ref_x = pts[refPointIndex].x;
-    float ref_y = pts[refPointIndex].y;
-
-    localPoint->x = ref_y - old_y;
-    localPoint->y = (ref_y - old_y) * (ref_y - old_y) + (ref_x - old_x) * (ref_x - old_x);
-}
-
-void projection(std::vector<point2D> pointsVector) {
-    point2D *res;
-
-    long unsigned int mem = sizeof(point2D) * pointsVector.size();
-    cudaMalloc((void**)&res, mem);
-    cudaMemcpy(res, &pointsVector[0], mem, cudaMemcpyHostToDevice);
-
-    dim3 dimGrid((pointsVector.size()+N-1)/N, 1);   // Nb of blocks
-    dim3 dimBlock(N, 1);
-    test<<<dimGrid, dimBlock>>>(res, pointsVector.size()/2);
-
-    cudaDeviceSynchronize();
-
-    point2D projection[pointsVector.size()]; // projection results
-    cudaMemcpy(projection, res, mem, cudaMemcpyDeviceToHost);
-
-    for (int i=0; i<pointsVector.size(); i++) {
-        std::cout << "Original: " << pointsVector[i].x << " " << pointsVector[i].y << std::endl;
-        std::cout << "Projected: " << projection[i].x << " " << projection[i].y << std::endl;
-    }
-
-    cudaFree(res);
-}
-
 int main(int argc, char *argv[]) {
 
     // TODO arguments reading and errors (filename, splitting method, ...)
@@ -76,14 +38,18 @@ int main(int argc, char *argv[]) {
         std::cout << "No input file provided" <<std::endl;
         return 1;
     }
+
+    // Read original values
     std::vector<point2D> pointsVector = readFile(argv[1]);
 
+    // Sorting values according to an axis (TODO GPU SORT)
     auto start = high_resolution_clock::now();
     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 	auto elapse = std::chrono::system_clock::now() - start;
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
 
-    projection(pointsVector);
+    // Get GPU array of projected points
+    point2D* proj = projection(pointsVector);
 
     // point2D* res = sortInputIntoGPU(pointsVector);
 
