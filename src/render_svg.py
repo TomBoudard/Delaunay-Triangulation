@@ -2,10 +2,9 @@
 
 """Renders triangles in a svg file"""
 
-# NOTE : a better visualization with circumscribed circles could be done
-
 import sys
 import os
+from math import sqrt
 
 def get_coords_list(coords_file):
     """Reads file containing every points and store them in an array"""
@@ -39,23 +38,55 @@ def render_svg(coords, trig):
         o.write(f"<svg xmlns='http://www.w3.org/2000/svg' version='1.1' width='{width}"
            f"' height='{width}'>\n")
 
-        # Write every triangle
+        trig_list = [] # Triangles list
+
+        # Get every triangle
         with open(trig, 'r') as t:
             for line in t:
                 line = list(map(int, line.split())) # line contains the triplet of indexes
-                o.write(add_trig(coords_list, line, min_val, width/200))
+
+                # Offset coordinated so the minimum is (0, 0) for svg rendering
+                for i in range(3):
+                    line[i] = [coords_list[line[i]][j] - min_val for j in range(2)]
+
+                trig_list.append(line)
+
+        for trig in trig_list:
+            o.write(add_trig(trig, width/200)) # Adding triangle
+        
+        for trig in trig_list:
+            o.write(add_circle(trig, width/200)) # Adding circle
         
         # End of image
         o.write(f"</svg>\n")
 
-def add_trig(coords_list, line, offset, w):
+def add_trig(trig, w):
     """Returns svg string for a given triangle"""
 
-    # Get coordinates and offset them in the square so it's visible on svg
-    for i in range(3):
-        line[i] = [coords_list[line[i]][j] - offset for j in range(2)]
+    return f'<polygon points="{trig[0][0]},{trig[0][1]} {trig[1][0]},{trig[1][1]} {trig[2][0]},{trig[2][1]}" style="fill:white;stroke:black;stroke-width:{w}" />\n'
 
-    return f'<polygon points="{line[0][0]},{line[0][1]} {line[1][0]},{line[1][1]} {line[2][0]},{line[2][1]}" style="fill:white;stroke:black;stroke-width:{w}" />\n'
+def add_circle(trig, w):
+    """Returns svg string for the circumscribed circle of a given triangle"""
+
+    vec_p_AB = (trig[1][1] - trig[0][1], trig[0][0] - trig[1][0]) # Perpendicular to AB
+    vec_p_AC = (trig[2][1] - trig[0][1], trig[0][0] - trig[2][0]) # Perpendicular to AC
+
+    # If vectors are identical or opposite, no triangle
+    det = vec_p_AB[1] * vec_p_AC[0] - vec_p_AB[0] * vec_p_AC[1]
+    if det == 0:
+        return ""
+
+    mid_AB = ((trig[1][0] + trig[0][0])/2, (trig[1][1] + trig[0][1])/2) 
+    mid_AC = ((trig[2][0] + trig[0][0])/2, (trig[2][1] + trig[0][1])/2)
+
+    u = (vec_p_AB[0] * (mid_AC[1] - mid_AB[1]) - vec_p_AB[1] * (mid_AC[0] - mid_AB[0])) / det
+
+    center = (mid_AC[0] + u * vec_p_AC[0], mid_AC[1] + u * vec_p_AC[1])
+
+    r = sqrt((center[0] - trig[0][0])**2 + (center[1] - trig[0][1])**2)
+
+    return f'<circle cx="{center[0]}" cy="{center[1]}" r="{r}" style="fill:none;stroke:black;stroke-width:{w}" />\n'
+
 
 if __name__=="__main__":
     if len(sys.argv) < 3 or sys.argv[1] in ["-h","--help"]:
