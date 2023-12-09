@@ -1,4 +1,9 @@
+#ifndef SORT_ARRAY
+#define SORT_ARRAY
+
 #include <stdio.h>
+#include <vector>
+#include <iostream>
 #include "point.cu"
 
 __global__ void simple(point2D *r) {
@@ -26,3 +31,4 @@ point2D* sortInputIntoGPU(std::vector<point2D> pointsVector) {
     return (point2D*) res;
 }
 
+#endif
