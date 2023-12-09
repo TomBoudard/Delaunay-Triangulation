@@ -30,7 +30,10 @@ std::vector<point2D> readFile(std::string nameFile){
 int main(int argc, char *argv[]) {
 
     // TODO arguments reading and errors (filename, splitting method, ...)
-
+    if (argc < 2) {
+        std::cout << "No input file provided" <<std::endl;
+        return 1;
+    }
     std::vector<point2D> pointsVector = readFile(argv[1]);
 
     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
