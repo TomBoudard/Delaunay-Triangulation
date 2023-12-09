@@ -4,7 +4,7 @@
 #define PT_STRUCT
 
 struct point2D {
-    int index;
+    unsigned int index;
     float x;
     float y;
 };
