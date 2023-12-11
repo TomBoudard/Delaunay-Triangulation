@@ -11,7 +11,7 @@ __global__ void projectPoint(point2D *pts, float ref_point_x, float ref_point_y,
 
     // x takes delta between y values
     localPoint->x = onAxisX ? delta_y : delta_x;
-    // y takes euclidian distance between points
+    // y takes euclidian distance squared between points
     localPoint->y = delta_y * delta_y + delta_x * delta_x;
 }
 
