@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
 
     // Get GPU array of projected points
     point2D* proj = projection(pointsVector);
+    cudaFree(proj);
 
     // point2D* res = sortInputIntoGPU(pointsVector);
 
