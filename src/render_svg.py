@@ -18,7 +18,7 @@ def get_coords_list(coords_file):
             pt = list(map(float, line.split()))
             coords_list.append(pt)
 
-            if min_val:
+            if min_val != None:
                 min_val = min(min_val, pt[0], pt[1])
                 max_val = max(max_val, pt[0], pt[1])
             else:
