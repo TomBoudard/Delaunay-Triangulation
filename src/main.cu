@@ -48,8 +48,13 @@ int main(int argc, char *argv[]) {
 	auto elapse = std::chrono::system_clock::now() - start;
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
 
+    point2D *pointsOnGPU;
+    long unsigned int mem = sizeof(point2D) * pointsVector.size();
+    cudaMalloc((void**)&pointsOnGPU, mem);
+    cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
+
     // Get GPU array of projected points
-    point2D* proj = projection(pointsVector);
+    point2D* proj = projection(pointsOnGPU, pointsVector.size());
     cudaFree(proj);
 
     // point2D* res = sortInputIntoGPU(pointsVector);
