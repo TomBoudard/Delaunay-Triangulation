@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 #include <chrono>
 #include "point.cu"
@@ -14,18 +15,36 @@ using namespace std::chrono;
 bool xCompare (point2D a, point2D b){return a.x < b.x;}
 bool yCompare (point2D a, point2D b){return a.y < b.y;}
 
+// Returns unique 64-bits int with 2 32-bits float
+long unsigned int hash(float x, float y) {
+    // Get binary representation of both numbers
+    long unsigned int xInt = * (unsigned int *) &x;
+    long unsigned int yInt = * (unsigned int *) &y;
+    return (xInt << 32) + yInt;
+}
+
 std::vector<point2D> readFile(std::string nameFile){
     std::vector<point2D> pointsVector;
 
     std::ifstream inputFile;
     inputFile.open(nameFile);
     
+    // Used to check if two points are identical
+    std::unordered_set<long unsigned int> pointsSet;
+
     unsigned int i=0;
     float x,y;
 
     while(inputFile >> x >> y) {
-        pointsVector.push_back({i++, x, y});
+        // Only push if the point is not over another
+        long unsigned int hashValue = hash(x, y);
+        if (!pointsSet.count(hashValue)) {
+            pointsSet.insert(hashValue);
+            pointsVector.push_back({i++, x, y});
+        }
     }
+
+    printf("%lu\n", pointsVector.size());
 
     return pointsVector;
     
