@@ -44,7 +44,8 @@ std::vector<point2D> readFile(std::string nameFile){
         }
     }
 
-    printf("%lu\n", pointsVector.size());
+    printf("Loaded file with %lu distinct points\n", pointsVector.size());
+    inputFile.close();
 
     return pointsVector;
     
