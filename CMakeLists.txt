@@ -9,9 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(SOURCES 
-    ${SRC_DIR}/main.cu
-    ${SRC_DIR}/point.cu
-    ${SRC_DIR}/sort_array.cu)
+    ${SRC_DIR}/main.cu)
 
 # CUDA Libraries
 find_package(CUDA)

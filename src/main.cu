@@ -3,20 +3,24 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include "point.cu"
+#include <chrono>
+#include "mesh.cu"
 #include "sort_array.cu"
+#include "projection.cu"
+
+using namespace std::chrono;
 
 //CPU Compare functions
-bool xCompare (point2D a, point2D b){return a.x < b.x;}
-bool yCompare (point2D a, point2D b){return a.y < b.y;}
+bool xCompare (vertex a, vertex b){return a.x < b.x;}
+bool yCompare (vertex a, vertex b){return a.y < b.y;}
 
-std::vector<point2D> readFile(std::string nameFile){
-    std::vector<point2D> pointsVector;
+std::vector<vertex> readFile(std::string nameFile){
+    std::vector<vertex> pointsVector;
 
     std::ifstream inputFile;
     inputFile.open(nameFile);
     
-    int i=0;
+    unsigned int i=0;
     float x,y;
 
     while(inputFile >> x >> y) {
@@ -27,26 +31,34 @@ std::vector<point2D> readFile(std::string nameFile){
     
 }
 
-point2D* sortInputIntoGPU(std::vector<point2D> pointsVector){
-    point2D* res;
-    int mem = sizeof(point2D)*pointsVector.size();
-    cudaMalloc((void**)&res, mem);
-    cudaMemcpy(res, &pointsVector, mem, cudaMemcpyHostToDevice);
-}
-
 int main(int argc, char *argv[]) {
 
     // TODO arguments reading and errors (filename, splitting method, ...)
-
-    std::vector<point2D> pointsVector = readFile(argv[1]);
-
-    std::sort(pointsVector.begin(), pointsVector.end(), yCompare);
-
-    for (int i = 0; i < pointsVector.size(); i++){
-        std::cout << "Point number : " << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    if (argc < 2) {
+        std::cout << "No input file provided" <<std::endl;
+        return 1;
     }
 
-    sortInputIntoGPU(pointsVector);
+    // Read original values
+    std::vector<vertex> pointsVector = readFile(argv[1]);
+
+    // Sorting values according to an axis (TODO GPU SORT)
+    auto start = high_resolution_clock::now();
+    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+	auto elapse = std::chrono::system_clock::now() - start;
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
+
+    // Get GPU array of projected points
+    vertex* proj = projection(pointsVector);
+    cudaFree(proj);
+
+    // vertex* res = sortInputIntoGPU(pointsVector);
+
+    // for (int i = 0; i < pointsVector.size(); i++){
+    //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    // }
+
+    // cudaFree(res);
 
     return 0;
 }
