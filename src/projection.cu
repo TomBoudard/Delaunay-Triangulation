@@ -10,12 +10,12 @@ __global__ void projectPoints(point2D *pts, point2D *projected, long unsigned in
 
     point2D refPoint = pts[refIdx];
     point2D localPoint = pts[idx];
-    float delta_y = refPoint.y - localPoint.y;
-    float delta_x = refPoint.x - localPoint.x;
+    float deltaY = refPoint.y - localPoint.y;
+    float deltaX = refPoint.x - localPoint.x;
 
     projected[idx].index = localPoint.index;
-    projected[idx].x = onAxisX ? delta_y : delta_x; // x takes delta between values over an axis
-    projected[idx].y = delta_y * delta_y + delta_x * delta_x; // y takes euclidian distance squared between points
+    projected[idx].x = onAxisX ? deltaY : deltaX; // x takes delta between values over an axis
+    projected[idx].y = deltaY * deltaY + deltaX * deltaX; // y takes euclidian distance squared between points
 }
 
 // // Each thread finds edges for a different projection
