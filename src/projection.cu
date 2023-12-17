@@ -1,42 +1,83 @@
 #define N 1024 // TODO WHICH VALUE?
 
-__global__ void projectPoint(vertex *pts, float ref_point_x, float ref_point_y, bool onAxisX) {
-    vertex* localPoint = &pts[(blockIdx.x*N + threadIdx.x)];
+#define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
 
-    float old_x = localPoint->x;
-    float old_y = localPoint->y;
+// Each thread finds edges for a different projection
+__global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int nbPts, bool onAxisX) {
+    long unsigned int idx = (blockIdx.x*N + threadIdx.x);
+    long unsigned int projectionIdx = idx / ((nbPts+N-1)/N);
+    long unsigned int refIdx = (nbPts * (1 + 2*projectionIdx)) / (2*N);
 
-    float delta_y = ref_point_y - old_y;
-    float delta_x = ref_point_x - old_x;
+    vertex refPoint = pts[refIdx];
+    vertex localPoint = pts[idx];
+    float delta_y = refPoint.y - localPoint.y;
+    float delta_x = refPoint.x - localPoint.x;
 
-    // x takes delta between y values
-    localPoint->x = onAxisX ? delta_y : delta_x;
-    // y takes euclidian distance between points
-    localPoint->y = delta_y * delta_y + delta_x * delta_x;
+    projected[idx].index = localPoint.index;
+    projected[idx].x = onAxisX ? delta_y : delta_x; // x takes delta between values over an axis
+    projected[idx].y = delta_y * delta_y + delta_x * delta_x; // y takes euclidian distance squared between points
 }
 
-vertex* projection(std::vector<vertex> pointsVector) {
-    vertex *res;
+// // Each thread finds edges for a different projection
+// __global__ void lowerConvexHull(vertex *projected, long unsigned int nbPts) {
+//     long unsigned int projectionId = blockIdx.x;
+//     long unsigned int nbPtsPerProjection = (nbPts+N-1) / N;
+//     // TODO SORT FOR LOWER CONVEX HULL
+//     // for (long unsigned int i = projectionId * nbPtsPerProjection; i < (projectionId + 1) * nbPtsPerProjection; i++) {
+//     //     printf("Thread nb %lu has point nb %lu with projection %f\n", projectionId, i, projected[i].y);
+//     // }
 
-    long unsigned int mem = sizeof(vertex) * pointsVector.size();
-    cudaMalloc((void**)&res, mem);
-    cudaMemcpy(res, &pointsVector[0], mem, cudaMemcpyHostToDevice);
+//     // TODO fix structure for ordered pts
+//     vertex* sortedByAngle;
+//     cudaMalloc((void **) &sortedByAngle, sizeof(vertex) * nbPtsPerProjection);
 
-    vertex midPoint = pointsVector[pointsVector.size()/2];
+//     // TODO fix ugly "structure" ?
+//     long unsigned int* stack;
+//     cudaMalloc((void **) &stack, sizeof(long unsigned int) * nbPtsPerProjection);
+//     unsigned int stackLen = 0;
+//     for (long unsigned int pt = 0; pt < nbPtsPerProjection; pt++) {
+//         // We pop if adding the point means a counterclockwise rotation
+//         while (stackLen > 1 && ccw(sortedByAngle[stack[stackLen]], sortedByAngle[stack[stackLen-1]], sortedByAngle[pt])) {
+//             stackLen--;
+//         }
+//         printf("trying to write %lu\n", pt);
+//         stack[stackLen] = pt;
+//         printf("it worked pog\n");
+//         stackLen++;
+//     }
+// }
 
-    dim3 dimGrid((pointsVector.size()+N-1)/N, 1);   // Nb of blocks
-    dim3 dimBlock(N, 1);
-    projectPoint<<<dimGrid, dimBlock>>>(res, midPoint.x, midPoint.y, true);
+vertex* projection(vertex* pointsOnGPU, long unsigned int nbPts) {
 
+    long unsigned int mem = nbPts * sizeof(vertex);
+
+    vertex* pointsProjected;
+    cudaMalloc((void **)&pointsProjected, mem);
+    
+    // Projection
+    float theTime;
+
+    cudaEvent_t myEvent, laterEvent;
+    cudaEventCreate(&myEvent);
+    cudaEventRecord(myEvent, 0);
+    cudaEventSynchronize(myEvent);
+    int dimGrid = (nbPts+N-1)/N;   // Nb of blocks
+    int dimBlock = N;
+    projectPoints<<<dimGrid, dimBlock>>>(pointsOnGPU, pointsProjected, nbPts, true);
     cudaDeviceSynchronize();
 
-    vertex* projection = new vertex[pointsVector.size()]; // projection results
-    cudaMemcpy(projection, res, mem, cudaMemcpyDeviceToHost);
+    cudaEventCreate(&laterEvent);
+    cudaEventRecord(laterEvent, 0);
+    cudaEventSynchronize(laterEvent);
 
-    // for (int i=0; i<pointsVector.size(); i++) {
-    //     std::cout << "Original: " << pointsVector[i].x << " " << pointsVector[i].y << std::endl;
-    //     std::cout << "Projected: " << projection[i].x << " " << projection[i].y << std::endl;
-    // }
+    // Delaunay edges
+    // Call "N" tasks in parallel
+    // lowerConvexHull<<<N, 1>>>(pointsProjected, nbPts);
+    // cudaDeviceSynchronize();
 
-    return res;
+    cudaEventElapsedTime(&theTime, myEvent, laterEvent);
+
+    printf("Algorithm took %f\n", theTime);
+
+    return pointsProjected;
 }

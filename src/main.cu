@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 #include <chrono>
 #include "mesh.cu"
@@ -10,9 +11,17 @@
 
 using namespace std::chrono;
 
-//CPU Compare functions
+//CPU Compare function
 bool xCompare (vertex a, vertex b){return a.x < b.x;}
 bool yCompare (vertex a, vertex b){return a.y < b.y;}
+
+// Returns unique 64-bits int with 2 32-bits float
+long unsigned int hash(float x, float y) {
+    // Get binary representation of both numbers
+    long unsigned int xInt = * (unsigned int *) &x;
+    long unsigned int yInt = * (unsigned int *) &y;
+    return (xInt << 32) + yInt;
+}
 
 std::vector<vertex> readFile(std::string nameFile){
     std::vector<vertex> pointsVector;
@@ -20,12 +29,23 @@ std::vector<vertex> readFile(std::string nameFile){
     std::ifstream inputFile;
     inputFile.open(nameFile);
     
+    // Used to check if two points are identical
+    std::unordered_set<long unsigned int> pointsSet;
+
     unsigned int i=0;
     float x,y;
 
     while(inputFile >> x >> y) {
-        pointsVector.push_back({i++, x, y});
+        // Only push if the point is not over another
+        long unsigned int hashValue = hash(x, y);
+        if (!pointsSet.count(hashValue)) {
+            pointsSet.insert(hashValue);
+            pointsVector.push_back({i++, x, y});
+        }
     }
+
+    std::cout << "Loaded file with " << pointsVector.size() << " distinct points\n" << std::endl;
+    inputFile.close();
 
     return pointsVector;
     
@@ -48,8 +68,13 @@ int main(int argc, char *argv[]) {
 	auto elapse = std::chrono::system_clock::now() - start;
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
 
+    vertex *pointsOnGPU;
+    long unsigned int mem = sizeof(vertex) * pointsVector.size();
+    cudaMalloc((void**)&pointsOnGPU, mem);
+    cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
+
     // Get GPU array of projected points
-    vertex* proj = projection(pointsVector);
+    vertex* proj = projection(pointsOnGPU, pointsVector.size());
     cudaFree(proj);
 
     // vertex* res = sortInputIntoGPU(pointsVector);
