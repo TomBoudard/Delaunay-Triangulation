@@ -16,6 +16,8 @@ __global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int 
     projected[idx].index = localPoint.index;
     projected[idx].x = onAxisX ? deltaY : deltaX; // x takes delta between values over an axis
     projected[idx].y = deltaY * deltaY + deltaX * deltaX; // y takes euclidian distance squared between points
+
+    printf("%u %f %f\n", projected[idx].index, projected[idx].x, projected[idx].y);
 }
 
 // // Each thread finds edges for a different projection
