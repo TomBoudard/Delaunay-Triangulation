@@ -5,15 +5,15 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
-#include "point.cu"
+#include "mesh.cu"
 #include "sort_array.cu"
 #include "projection.cu"
 
 using namespace std::chrono;
 
 //CPU Compare function
-bool xCompare (point2D a, point2D b){return a.x < b.x;}
-bool yCompare (point2D a, point2D b){return a.y < b.y;}
+bool xCompare (vertex a, vertex b){return a.x < b.x;}
+bool yCompare (vertex a, vertex b){return a.y < b.y;}
 
 // Returns unique 64-bits int with 2 32-bits float
 long unsigned int hash(float x, float y) {
@@ -23,8 +23,8 @@ long unsigned int hash(float x, float y) {
     return (xInt << 32) + yInt;
 }
 
-std::vector<point2D> readFile(std::string nameFile){
-    std::vector<point2D> pointsVector;
+std::vector<vertex> readFile(std::string nameFile){
+    std::vector<vertex> pointsVector;
 
     std::ifstream inputFile;
     inputFile.open(nameFile);
@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Read original values
-    std::vector<point2D> pointsVector = readFile(argv[1]);
+    std::vector<vertex> pointsVector = readFile(argv[1]);
 
     // Sorting values according to an axis (TODO GPU SORT)
     auto start = high_resolution_clock::now();
@@ -68,16 +68,16 @@ int main(int argc, char *argv[]) {
 	auto elapse = std::chrono::system_clock::now() - start;
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
 
-    point2D *pointsOnGPU;
-    long unsigned int mem = sizeof(point2D) * pointsVector.size();
+    vertex *pointsOnGPU;
+    long unsigned int mem = sizeof(vertex) * pointsVector.size();
     cudaMalloc((void**)&pointsOnGPU, mem);
     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
 
     // Get GPU array of projected points
-    point2D* proj = projection(pointsOnGPU, pointsVector.size());
+    vertex* proj = projection(pointsOnGPU, pointsVector.size());
     cudaFree(proj);
 
-    // point2D* res = sortInputIntoGPU(pointsVector);
+    // vertex* res = sortInputIntoGPU(pointsVector);
 
     // for (int i = 0; i < pointsVector.size(); i++){
     //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;

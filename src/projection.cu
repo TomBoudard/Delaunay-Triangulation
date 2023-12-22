@@ -3,7 +3,7 @@
 #define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
 
 // Each thread finds edges for a different projection
-__global__ void projectPoints(point2D *pts, point2D *projected, long unsigned int nbPts, bool onAxisX) {
+__global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int nbPts, bool onAxisX) {
     long unsigned int idx = (blockIdx.x*N + threadIdx.x);
     long unsigned int projectionIdx = idx / ((nbPts+N-1)/N);
     long unsigned int refIdx = (nbPts * (1 + 2*projectionIdx)) / (2*N);
@@ -19,7 +19,7 @@ __global__ void projectPoints(point2D *pts, point2D *projected, long unsigned in
 }
 
 // // Each thread finds edges for a different projection
-// __global__ void lowerConvexHull(point2D *projected, long unsigned int nbPts) {
+// __global__ void lowerConvexHull(vertex *projected, long unsigned int nbPts) {
 //     long unsigned int projectionId = blockIdx.x;
 //     long unsigned int nbPtsPerProjection = (nbPts+N-1) / N;
 //     // TODO SORT FOR LOWER CONVEX HULL
@@ -28,8 +28,8 @@ __global__ void projectPoints(point2D *pts, point2D *projected, long unsigned in
 //     // }
 
 //     // TODO fix structure for ordered pts
-//     point2D* sortedByAngle;
-//     cudaMalloc((void **) &sortedByAngle, sizeof(point2D) * nbPtsPerProjection);
+//     vertex* sortedByAngle;
+//     cudaMalloc((void **) &sortedByAngle, sizeof(vertex) * nbPtsPerProjection);
 
 //     // TODO fix ugly "structure" ?
 //     long unsigned int* stack;
@@ -47,11 +47,11 @@ __global__ void projectPoints(point2D *pts, point2D *projected, long unsigned in
 //     }
 // }
 
-point2D* projection(point2D* pointsOnGPU, long unsigned int nbPts) {
+vertex* projection(vertex* pointsOnGPU, long unsigned int nbPts) {
 
-    long unsigned int mem = nbPts * sizeof(point2D);
+    long unsigned int mem = nbPts * sizeof(vertex);
 
-    point2D* pointsProjected;
+    vertex* pointsProjected;
     cudaMalloc((void **)&pointsProjected, mem);
     
     // Projection
