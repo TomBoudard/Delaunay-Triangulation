@@ -8,8 +8,8 @@ __global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int 
     long unsigned int projectionIdx = idx / ((nbPts+N-1)/N);
     long unsigned int refIdx = (nbPts * (1 + 2*projectionIdx)) / (2*N);
 
-    point2D refPoint = pts[refIdx];
-    point2D localPoint = pts[idx];
+    vertex refPoint = pts[refIdx];
+    vertex localPoint = pts[idx];
     float deltaY = refPoint.y - localPoint.y;
     float deltaX = refPoint.x - localPoint.x;
 
@@ -77,7 +77,7 @@ vertex* projection(vertex* pointsOnGPU, long unsigned int nbPts) {
 
     cudaEventElapsedTime(&theTime, myEvent, laterEvent);
 
-    printf("Algorithm took %f\n", theTime);
+    std::cout << "Algorithm took " << theTime << std::endl;
 
     return pointsProjected;
 }
