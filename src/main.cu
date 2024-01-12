@@ -8,12 +8,13 @@
 #include "mesh.cu"
 #include "sort_array.cu"
 #include "projection.cu"
+#include "parDeTri.cu"
 
 using namespace std::chrono;
 
 //CPU Compare function
-bool xCompare (vertex a, vertex b){return a.x < b.x;}
-bool yCompare (vertex a, vertex b){return a.y < b.y;}
+bool xCompare (float3 a, float3 b){return a.x < b.x;}
+bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
 // Returns unique 64-bits int with 2 32-bits float
 long unsigned int hash(float x, float y) {
@@ -23,8 +24,8 @@ long unsigned int hash(float x, float y) {
     return (xInt << 32) + yInt;
 }
 
-std::vector<vertex> readFile(std::string nameFile){
-    std::vector<vertex> pointsVector;
+std::vector<float3> readFile(std::string nameFile){
+    std::vector<float3> pointsVector;
 
     std::ifstream inputFile;
     inputFile.open(nameFile);
@@ -40,7 +41,8 @@ std::vector<vertex> readFile(std::string nameFile){
         long unsigned int hashValue = hash(x, y);
         if (!pointsSet.count(hashValue)) {
             pointsSet.insert(hashValue);
-            pointsVector.push_back({i++, x, y});
+            pointsVector.push_back({x, y, * (float *) &i});
+            i++;
         }
     }
 
@@ -60,13 +62,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Read original values
-    std::vector<vertex> pointsVector = readFile(argv[1]);
+    std::vector<float3> pointsVector = readFile(argv[1]);
 
     // CPU Sorting values according to an axis
     // std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 
-    vertex *pointsOnGPU;
-    long unsigned int mem = sizeof(vertex) * pointsVector.size();
+    float3 *pointsOnGPU;
+    long unsigned int mem = sizeof(float3) * pointsVector.size();
     cudaMalloc((void**)&pointsOnGPU, mem);
     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
     sortArray(&pointsOnGPU, pointsVector.size());
@@ -74,14 +76,14 @@ int main(int argc, char *argv[]) {
     // DEBUG (copy back & print)
     cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
     for (int i = 0; i < pointsVector.size(); i++){
-        std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+        std::cout << "Index :" << * (int *) &(pointsVector[i].z) << " X :" << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
     } 
 
     // // Get GPU array of projected points
-    // vertex* proj = projection(pointsOnGPU, pointsVector.size());
+    // float3* proj = projection(pointsOnGPU, pointsVector.size());
     // cudaFree(proj);
 
-    // vertex* res = sortInputIntoGPU(pointsVector);
+    // float3* res = sortInputIntoGPU(pointsVector);
 
     // for (int i = 0; i < pointsVector.size(); i++){
     //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;

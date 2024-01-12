@@ -21,15 +21,15 @@ __global__ void sortGPU() {
 //  - Pointer of the original array and length
 // Output:
 //  - Pointer of the sorted array
-void sortArray(vertex** input, unsigned int len) {
+void sortArray(float3** input, unsigned int len) {
 
     // We do a merge sort so we will alternate between two buffers
     // The first one is the provided array, the other is allocated here
-    vertex* newBuffer;
-    long unsigned int mem = sizeof(vertex) * len;
+    float3* newBuffer;
+    long unsigned int mem = sizeof(float3) * len;
     cudaMalloc((void**)&newBuffer, mem);
 
-    vertex** buffers[2];
+    float3** buffers[2];
     buffers[0] = input;
     buffers[1] = &newBuffer;
 
@@ -43,21 +43,21 @@ void sortArray(vertex** input, unsigned int len) {
 }
 
 
-// __global__ void simple(vertex *r) {
+// __global__ void simple(float3 *r) {
 //     r[threadIdx.x].x = threadIdx.x;
 // }
 
 // // Sorts the vector into the GPU memory
 // // Returns pointer to sorted array in GPU
-// vertex* sortInputIntoGPU(std::vector<vertex> pointsVector) {
-//     vertex *res;
-//     int mem = sizeof(vertex) * pointsVector.size();
+// float3* sortInputIntoGPU(std::vector<float3> pointsVector) {
+//     float3 *res;
+//     int mem = sizeof(float3) * pointsVector.size();
 //     cudaMalloc((void**)&res, mem);
 
 //     cudaMemcpy(res, &pointsVector, 10, cudaMemcpyHostToDevice);
 
 //     dim3 dimGrid(mem, 1);
-//     dim3 dimBlock(sizeof(vertex), 1);
+//     dim3 dimBlock(sizeof(float3), 1);
 //     simple<<<dimGrid, dimBlock>>>(res);
 
 //     cudaMemcpy(&pointsVector, res, 10, cudaMemcpyDeviceToHost);
@@ -65,7 +65,7 @@ void sortArray(vertex** input, unsigned int len) {
 //     for (int i=0; i<10; i++) std::cout<< res[i].x <<" ";
 //     std::cout<<std::endl;
 
-//     return (vertex*) res;
+//     return (float3*) res;
 // }
 
 #endif
