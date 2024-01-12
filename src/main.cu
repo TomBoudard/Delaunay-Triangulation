@@ -53,7 +53,7 @@ std::vector<vertex> readFile(std::string nameFile){
 
 int main(int argc, char *argv[]) {
 
-    // TODO arguments reading and errors (filename, splitting method?, ...)
+    // arguments reading and errors (filename)
     if (argc < 2) {
         std::cout << "No input file provided" <<std::endl;
         return 1;
@@ -62,20 +62,24 @@ int main(int argc, char *argv[]) {
     // Read original values
     std::vector<vertex> pointsVector = readFile(argv[1]);
 
-    // Sorting values according to an axis (TODO GPU SORT)
-    auto start = high_resolution_clock::now();
-    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
-	auto elapse = std::chrono::system_clock::now() - start;
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
+    // CPU Sorting values according to an axis
+    // std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 
     vertex *pointsOnGPU;
     long unsigned int mem = sizeof(vertex) * pointsVector.size();
     cudaMalloc((void**)&pointsOnGPU, mem);
     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
+    sortArray(&pointsOnGPU, pointsVector.size());
 
-    // Get GPU array of projected points
-    vertex* proj = projection(pointsOnGPU, pointsVector.size());
-    cudaFree(proj);
+    // DEBUG (copy back & print)
+    cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
+    for (int i = 0; i < pointsVector.size(); i++){
+        std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    } 
+
+    // // Get GPU array of projected points
+    // vertex* proj = projection(pointsOnGPU, pointsVector.size());
+    // cudaFree(proj);
 
     // vertex* res = sortInputIntoGPU(pointsVector);
 
@@ -87,3 +91,8 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
+// CPU time
+// auto start = high_resolution_clock::now();
+// auto elapse = std::chrono::system_clock::now() - start;
+// auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
