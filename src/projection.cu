@@ -1,6 +1,24 @@
 // #define N 1024 // TODO WHICH VALUE?
 
-// #define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
+#define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
+
+// Each thread finds edges for a different projection
+// __global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int nbPts, bool onAxisX) {
+//     long unsigned int idx = (blockIdx.x*N + threadIdx.x);
+//     long unsigned int projectionIdx = idx / ((nbPts+N-1)/N);
+//     long unsigned int refIdx = (nbPts * (1 + 2*projectionIdx)) / (2*N);
+
+//     vertex refPoint = pts[refIdx];
+//     vertex localPoint = pts[idx];
+//     float deltaY = refPoint.y - localPoint.y;
+//     float deltaX = refPoint.x - localPoint.x;
+
+//     projected[idx].index = localPoint.index;
+//     projected[idx].x = onAxisX ? deltaY : deltaX; // x takes delta between values over an axis
+//     projected[idx].y = deltaY * deltaY + deltaX * deltaX; // y takes euclidian distance squared between points
+
+//     printf("%u %f %f\n", projected[idx].index, projected[idx].x, projected[idx].y);
+// }
 
 // // Each thread finds edges for a different projection
 // __global__ void projectPoints(vertex *pts, vertex *projected, long unsigned int nbPts, bool onAxisX) {
@@ -77,7 +95,7 @@
 
 //     cudaEventElapsedTime(&theTime, myEvent, laterEvent);
 
-//     printf("Algorithm took %f\n", theTime);
+    // printf("Algorithm took %f\n", theTime);
 
 //     return pointsProjected;
 // }
