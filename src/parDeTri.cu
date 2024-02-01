@@ -93,17 +93,18 @@ int parDeTri(float3* points, int3* edgeList, int3* triangleList, int nbPoints, i
         for (int i = 0; i<nbPoints; i++){
             float3 firstVector = edgeEndPoint-edgeStartPoint;
             float3 secondVector = points[i]-edgeStartPoint;
-            float scalarProduct = firstVector.x*secondVector.x + firstVector.y*secondVector.y;
+            float zVectorialProduct = firstVector.x*secondVector.y - firstVector.y*secondVector.x;
             int pointSide = 0;
-            if (scalarProduct < 0){
+            if (zVectorialProduct < 0){
                 pointSide = -1;
             }
-            else if (scalarProduct > 0){
+            else{
                 pointSide = 1;
             }
-            if(points[i].z != currentEdge.x && points[i].z != currentEdge.y && pointSide != currentEdge.z){ //If pointSide==currentEdge.z==0 it is skipped but we don't care about this case
+            // std::cout << "Edge side (1): " << currentEdge.z << std::endl;
+            if(points[i].z != currentEdge.x && points[i].z != currentEdge.y && pointSide != currentEdge.z && currentEdge.z != 2){ //If pointSide==currentEdge.z==0 it is skipped but we don't care about this case
                 float radius = delaunayDistance(edgeStartPoint, edgeEndPoint, points[i]);
-                std::cout << "Radius: " << radius << " for point : " << points[i].z << std::endl;
+                // std::cout << "Radius: " << radius << " for point : " << points[i].z << std::endl;
                 if (radius < bestRadius){
                     int3 currentTriangle = make_int3(currentEdge.x, currentEdge.y, points[i].z);
                     bool alreadyExisting = false;
@@ -120,38 +121,46 @@ int parDeTri(float3* points, int3* edgeList, int3* triangleList, int nbPoints, i
                 }
             }
         }
-        std::cout << "Best radius: " << bestRadius << std::endl;
-        std::cout << "======================" << std::endl;
+        // std::cout << "Best radius: " << bestRadius << std::endl;
+        std::cout << "Best third point: " << bestThirdPoint.z << std::endl;
+        std::cout << "------------------------" << std::endl;
         if (triangleFound){
             bool validTriangle = true;
             int3 secondEdge = make_int3(currentEdge.y, bestThirdPoint.z, 0);
             int3 thirdEdge = make_int3(bestThirdPoint.z, currentEdge.x, 0);
             bool secondEdgeNew = true;
             bool thirdEdgeNew = true;
+            int indexSecondEdge = -1;
+            int indexThirdEdge = -1;
             for (int k = 0; k<=endEdgeIndex; k++){
                 if (!(secondEdge != edgeList[k])){
                     secondEdgeNew = false;
                     secondEdge = edgeList[k];
+                    indexSecondEdge = k;
+                    std::cout << "EDGE 2 OLD" << edgeList[k].z << std::endl;
                 }
                 if (!(thirdEdge != edgeList[k])){
                     thirdEdgeNew = false;
                     thirdEdge = edgeList[k];
+                    indexThirdEdge = k;
+                    std::cout << "EDGE 3 OLD" << edgeList[k].z << std::endl;
                 }
             }
 
             float3 firstVectorSecondEdge = bestThirdPoint-edgeEndPoint;
             float3 secondVectorSecondEdge = edgeStartPoint-edgeEndPoint;
-            float scalarProductSecondEdge = firstVectorSecondEdge.x*secondVectorSecondEdge.x + firstVectorSecondEdge.y*secondVectorSecondEdge.y;
+            float zVectorialProductSecondEdge = firstVectorSecondEdge.x*secondVectorSecondEdge.y - firstVectorSecondEdge.y*secondVectorSecondEdge.x;
 
             float3 firstVectorThirdEdge = edgeStartPoint-bestThirdPoint;
             float3 secondVectorThirdEdge = edgeEndPoint-bestThirdPoint;
-            float scalarProductThirdEdge = firstVectorThirdEdge.x*secondVectorThirdEdge.x + firstVectorThirdEdge.y*secondVectorThirdEdge.y;
+            float zVectorialProductThirdEdge = firstVectorThirdEdge.x*secondVectorThirdEdge.y - firstVectorThirdEdge.y*secondVectorThirdEdge.x;
 
             //The case where the edge has two points on the same side is not possible here otherwise the bestThirdPoint wouldn't have been choosen
 
             //Add the two side edges only if they are new (the first one is always preexisting)
+            std::cout << "SECOND EDGE SIDE USED: " << secondEdge.z << std::endl;
             if (secondEdgeNew){
-                if (scalarProductSecondEdge < 0){
+                if (zVectorialProductSecondEdge < 0){
                     secondEdge.z = -1;
                 }
                 else{
@@ -160,12 +169,17 @@ int parDeTri(float3* points, int3* edgeList, int3* triangleList, int nbPoints, i
                 edgeList[endEdgeIndex] = secondEdge;
                 endEdgeIndex++;
             }
-            else if (scalarProductSecondEdge*secondEdge.z > 0){ //If they have the same sign
+            else if (zVectorialProductSecondEdge*secondEdge.z > 0 || secondEdge.z == 2){ //If they have the same sign
                 validTriangle = false;
             }
+            else{
+                secondEdge.z = 2;
+                edgeList[indexSecondEdge].z = secondEdge.z;
+            }
 
+            std::cout << "THIRD EDGE SIDE USED: " << thirdEdge.z << std::endl;
             if (thirdEdgeNew){
-                if (scalarProductThirdEdge < 0){
+                if (zVectorialProductThirdEdge < 0){
                     thirdEdge.z = -1;
                 }
                 else{
@@ -174,13 +188,24 @@ int parDeTri(float3* points, int3* edgeList, int3* triangleList, int nbPoints, i
                 edgeList[endEdgeIndex] = thirdEdge;
                 endEdgeIndex++;
             }
-            else if (scalarProductSecondEdge*thirdEdge.z > 0){ //If they have the same sign
-                validTriangle = validTriangle && false;
+            else if (zVectorialProductThirdEdge*thirdEdge.z > 0 || thirdEdge.z == 2){ //If they have the same sign
+                validTriangle = false;
+            }
+            else{
+                thirdEdge.z = 2;
+                edgeList[indexThirdEdge].z = thirdEdge.z;
             }
 
-            triangleList[triangleIndex] = make_int3(currentEdge.x, currentEdge.y, bestThirdPoint.z);
-            triangleIndex++;
+            std::cout << "Edge side (2): " << secondEdge.z << std::endl;
+            std::cout << "Edge side (3): " << thirdEdge.z << std::endl;
+
+            if(validTriangle){
+                std::cout << "THE TRIANGLE IS VALID" << std::endl;
+                triangleList[triangleIndex] = make_int3(currentEdge.x, currentEdge.y, bestThirdPoint.z);
+                triangleIndex++;
+            }
         }
+        std::cout << "======================" << std::endl;
         startEdgeIndex++;
     }
     return triangleIndex;

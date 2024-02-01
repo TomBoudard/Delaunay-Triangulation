@@ -73,7 +73,7 @@ float delaunayDistance(float3 const& edgeStart, float3 const& edgeEnd, float3 co
     circumCenter.x = (barCircumCenterA*edgeStart.x + barCircumCenterB*edgeEnd.x + barCircumCenterC*point.x)/sumBarycenters;
     circumCenter.y = (barCircumCenterA*edgeStart.y + barCircumCenterB*edgeEnd.y + barCircumCenterC*point.y)/sumBarycenters;
 
-    std::cout << "Circumcenter : " << circumCenter.x << " and " << circumCenter.y << " for edge : " << edgeStart.z << " and " << edgeEnd.z << std::endl;
+    // std::cout << "Circumcenter : " << circumCenter.x << " and " << circumCenter.y << " for edge : " << edgeStart.z << " and " << edgeEnd.z << std::endl;
 
     float radius = sqrt(length(circumCenter-point));
 
