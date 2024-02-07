@@ -42,4 +42,4 @@ Usage : `./render_svg.py coords_list trig_list`
 
 ## Triangulation
 
-Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main`.
+Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main input_file`.
