@@ -1,5 +1,5 @@
-#define THRESHOLD 5 // TODO WHICH VALUE?
-#define NB_MAX_THREADS 4 // SHOULD BE POWER OF 2
+#define THRESHOLD 128 // TODO WHICH VALUE?
+#define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
 #define biggerPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
@@ -33,9 +33,10 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
 
         projected[ptId] = make_float3(deltaY, dist, pt.z);
     }
+    // printf("Round %d, Block %d, Th %d\t will project [%d, %d[ on %d\n", roundId, blockIdx.x, threadIdx.x,
+    //     sliceThreadBeg, sliceThreadEnd, refPoint);
 
     // -- Sorting points by polar angle
-
     // TODO BETTER SORT ALGORITHM
     if (threadIdx.x == 0) {
         // Find the lowest x-coordinate (and highest y-coordinate if necessary)
@@ -60,16 +61,12 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
             }
         }
     }
-    printf("Round %d, Block %d, Th %d\t will project [%d, %d[ on %d\n", roundId, blockIdx.x, threadIdx.x,
-        sliceThreadBeg, sliceThreadEnd, refPoint);
     __syncthreads();
 
     // -- Lower Convex Hull (Sequential algorithm - Graham scan)
-    // Writting the stack directly on global memory because of unfixed size
+    // Writing the stack directly on global memory because of unfixed size
 
     if (threadIdx.x == 0) {
-        
-
         // Find the lowest and highest x-coordinate (and highest y-coordinate to handle '==' case)
         // The algorithm will start from the rightmost point and end when the leftmost point is added
         int leftmostPointIndex = sliceBlockBeg;
@@ -87,28 +84,36 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
 
         paths[sliceBlockBeg] = projected[rightmostPointIndex];
         int stackIndex = 1; // Used to track stack. Starts at one because we already filled first value
+        int maxStackIndex = 1; // Used to clean stack at the end by rewriting end values if unused
 
         for (int pt=0; pt < sliceBlockEnd - sliceBlockBeg - 1; pt++) {  // Maximum number of loops is number of points - 1
             // Pop points from stack until we turn clockwise for the next point
             while (stackIndex > 1 && ccw(paths[sliceBlockBeg + stackIndex - 2],
                                          paths[sliceBlockBeg + stackIndex - 1],
                                          projected[sliceBlockBeg + pt])) {
-                printf("Removing point %u from path\n", * (int*) &projected[sliceBlockBeg + stackIndex - 1].z);
+                //printf("Removing point %u from path\n", * (int*) &projected[sliceBlockBeg + stackIndex - 1].z);
                 stackIndex--;
             }
-            printf("Adding point %u to path\n", * (int*) &projected[sliceBlockBeg + pt].z);
+            //printf("Adding point %u to path\n", * (int*) &projected[sliceBlockBeg + pt].z);
+
             // Add new point to path
             paths[sliceBlockBeg + stackIndex] = projected[sliceBlockBeg + pt];
             stackIndex++;
+            if (stackIndex > maxStackIndex) maxStackIndex++;
+
             // End loop if we hit the last point of the path
             if (sliceBlockBeg + pt == leftmostPointIndex) {
-                printf("End of path ! Added point %u\n", * (int*) &projected[leftmostPointIndex].z);
+                //printf("End of path ! Added point %u\n", * (int*) &projected[leftmostPointIndex].z);
                 break;
             }
         }
+
+        printf("Path done ! Length : %u / %u\t (Went to %u)\n",
+               stackIndex, sliceBlockEnd - sliceBlockBeg, maxStackIndex);
+
         // Clean end of stack
-        while (stackIndex < sliceBlockEnd - sliceBlockBeg) {
-            paths[sliceBlockBeg + stackIndex] = make_float3(0, 0, -1);
+        while (stackIndex < maxStackIndex) {
+            paths[sliceBlockBeg + stackIndex] = make_float3(-1, -1, -1);
             stackIndex++;
         }
     }
@@ -148,28 +153,28 @@ int3* createPaths(float3 *points, int nbPoints) {
         projectSlice<<<nbBlocks, nbThreads>>>(points, bufferProjection, &paths[nbPoints * i], nbPoints, i);
         cudaDeviceSynchronize();
 
-        // DEBUG PRINT PROJECTED ARRAY
-        float3 pt[nbPoints];
-        cudaMemcpy(pt, bufferProjection, nbPoints * sizeof(float3), cudaMemcpyDeviceToHost);
-        for (int i = 0; i < nbPoints; i++){
-            std::cout << "Index :" << * (int *) &(pt[i].z) << " X :" << pt[i].x << " Y :" << pt[i].y;
-            std::cout << " Polar angle with last point :" << atan2(pt[i].x - pt[nbPoints-1].x, pt[i].y - pt[nbPoints-1].y) << std::endl;
-        } 
+        // // DEBUG PRINT PROJECTED ARRAY
+        // float3 pt[nbPoints];
+        // cudaMemcpy(pt, bufferProjection, nbPoints * sizeof(float3), cudaMemcpyDeviceToHost);
+        // for (int i = 0; i < nbPoints; i++){
+        //     std::cout << "Index :" << * (int *) &(pt[i].z) << " X :" << pt[i].x << " Y :" << pt[i].y;
+        //     std::cout << " Polar angle with last point :" << atan2(pt[i].x - pt[nbPoints-1].x, pt[i].y - pt[nbPoints-1].y) << std::endl;
+        // } 
     }
 
-    // DEBUG PRINT PROJECTED ARRAY
-    float3 p[nbPoints * log2nbSubproblems];
-    cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(float3), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < log2nbSubproblems; i++) {
-        for (int j = 0; j < nbPoints; j++) {
-            if (p[i*nbPoints + j].z >= 0) {
-                std::cout << "(" << p[i*nbPoints + j].x << "," << p[i*nbPoints + j].y << "," << * (int*) &(p[i*nbPoints + j].z) << ")";
-            } else {
-                std::cout << ".";
-            }
-        }
-        std::cout << std::endl;
-    }
+    // // DEBUG PRINT PROJECTED ARRAY
+    // float3 p[nbPoints * log2nbSubproblems];
+    // cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(float3), cudaMemcpyDeviceToHost);
+    // for (int i = 0; i < log2nbSubproblems; i++) {
+    //     for (int j = 0; j < nbPoints; j++) {
+    //         if (p[i*nbPoints + j].z >= 0) {
+    //             std::cout << "(" << p[i*nbPoints + j].x << "," << p[i*nbPoints + j].y << "," << * (int*) &(p[i*nbPoints + j].z) << ")";
+    //         } else {
+    //             std::cout << ".";
+    //         }
+    //     }
+    //     std::cout << std::endl;
+    // }
 
     cudaFree(bufferProjection);
     return 0;
