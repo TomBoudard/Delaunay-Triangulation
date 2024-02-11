@@ -41,7 +41,7 @@ bool yCompare (float3 a, float3 b){return a.y < b.y;}
 //         long unsigned int hashValue = hash(x, y);
 //         if (!pointsSet.count(hashValue)) {
 //             pointsSet.insert(hashValue);
-//             pointsVector.push_back({i++, x, y});
+//             pointsVector.push_back({x, y, i++});
 //         }
 //     }
 
@@ -93,17 +93,18 @@ bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
 int main() {
 
+    int nbPoints = 9;
     float3 a = make_float3(0.0, 0.0, 0.0);
-    float3 b = make_float3(1.0, 0.0, 1.0);
+    float3 b = make_float3(1.0, 0.5, 1.0);
     float3 c = make_float3(2.0, 0.0, 2.0);
-    float3 d = make_float3(0.0, 1.0, 3.0);
+    float3 d = make_float3(0.5, 1.0, 3.0);
     float3 e = make_float3(1.0, 1.0, 4.0);
-    float3 f = make_float3(2.0, 1.0, 5.0);
+    float3 f = make_float3(1.5, 1.0, 5.0);
     float3 g = make_float3(0.0, 2.0, 6.0);
-    float3 h = make_float3(1.0, 2.0, 7.0);
+    float3 h = make_float3(1.0, 1.5, 7.0);
     float3 i = make_float3(2.0, 2.0, 8.0);
 
-    float3 points[9];
+    float3 points[nbPoints];
     points[0] = a;
     points[1] = b;
     points[2] = c;
@@ -114,13 +115,19 @@ int main() {
     points[7] = h;
     points[8] = i;
 
-    int3 edgeList[36]; //Third int --> 0:init | 1:used for one side | -1:used for the other side
-    edgeList[0] = make_int3(0, 3, 0);
-    edgeList[1] = make_int3(3, 6, 0);
+    int nbMaxTriangles = 2*nbPoints - 2;
+    int nbMaxEdges = 3*nbMaxTriangles;
 
-    int3 triangleList[84];
+    edge edgeList[nbMaxEdges]; //Third int --> 0:init | 1:used in way x -> y | -1:used for the way y -> x
+    edgeList[0] = {points[0], points[3], 0};
+    edgeList[1] = {points[3], points[6], 0};
+    edgeList[2] = {points[2], points[5], 0};
+    edgeList[3] = {points[5], points[8], 0};
 
-    int nbTriangles = parDeTri(points, edgeList, triangleList, 9, 2);
+
+    int3 triangleList[nbMaxTriangles];
+
+    int nbTriangles = parDeTri(points, edgeList, triangleList, 9, 4);
 
     for (int i = 0; i < nbTriangles; i++){
         std::cout << "A: " << triangleList[i].x << " B: " << triangleList[i].y << " C: " << triangleList[i].z << std::endl;

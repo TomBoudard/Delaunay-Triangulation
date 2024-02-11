@@ -17,6 +17,22 @@
 //     return !(a==b);
 // }
 
+struct edge{
+    float3 x;
+    float3 y;
+    int side;
+};
+
+bool operator==(edge const& a, edge const& b){
+    if (a.x.z == b.x.z && a.y.z == b.y.z){
+        return true;
+    }
+    else if(a.x.z == b.y.z && a.y.z == b.x.z){
+        return true;
+    }
+    return false;
+}
+
 bool operator==(int3 const& a, int3 const& b){
     if (a.x == b.x && a.y == b.y && a.z == b.z){
         return true;
