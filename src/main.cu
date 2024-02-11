@@ -16,122 +16,85 @@ using namespace std::chrono;
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
 bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
-// // Returns unique 64-bits int with 2 32-bits float
-// long unsigned int hash(float x, float y) {
-//     // Get binary representation of both numbers
-//     long unsigned int xInt = * (unsigned int *) &x;
-//     long unsigned int yInt = * (unsigned int *) &y;
-//     return (xInt << 32) + yInt;
-// }
+// Returns unique 64-bits int with 2 32-bits float
+long unsigned int hash(float x, float y) {
+    // Get binary representation of both numbers
+    long unsigned int xInt = * (unsigned int *) &x;
+    long unsigned int yInt = * (unsigned int *) &y;
+    return (xInt << 32) + yInt;
+}
 
-// std::vector<float3> readFile(std::string nameFile){
-//     std::vector<float3> pointsVector;
+std::vector<float3> readFile(std::string nameFile){
+    std::vector<float3> pointsVector;
 
-//     std::ifstream inputFile;
-//     inputFile.open(nameFile);
+    std::ifstream inputFile;
+    inputFile.open(nameFile);
     
-//     // Used to check if two points are identical
-//     std::unordered_set<long unsigned int> pointsSet;
+    // Used to check if two points are identical
+    std::unordered_set<long unsigned int> pointsSet;
 
-//     unsigned int i=0;
-//     float x,y;
+    unsigned int i=0;
+    float x,y;
 
-//     while(inputFile >> x >> y) {
-//         // Only push if the point is not over another
-//         long unsigned int hashValue = hash(x, y);
-//         if (!pointsSet.count(hashValue)) {
-//             pointsSet.insert(hashValue);
-//             pointsVector.push_back({x, y, i++});
-//         }
-//     }
-
-//     std::cout << "Loaded file with " << pointsVector.size() << " distinct points\n" << std::endl;
-//     inputFile.close();
-
-//     return pointsVector;
-    
-// }
-
-// int main(int argc, char *argv[]) {
-
-//     // TODO arguments reading and errors (filename, splitting method, ...)
-//     if (argc < 2) {
-//         std::cout << "No input file provided" <<std::endl;
-//         return 1;
-//     }
-
-//     // Read original values
-//     std::vector<float3> pointsVector = readFile(argv[1]);
-
-
-//     // Sorting values according to an axis (TODO GPU SORT)
-//     auto start = high_resolution_clock::now();
-//     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
-
-// 	auto elapse = std::chrono::system_clock::now() - start;
-// 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
-
-//     float3 *pointsOnGPU;
-//     long unsigned int mem = sizeof(float3) * pointsVector.size();
-//     cudaMalloc((void**)&pointsOnGPU, mem);
-//     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
-
-//     // Get GPU array of projected points
-//     // float3* proj = projection(pointsOnGPU, pointsVector.size());
-//     // cudaFree(proj);
-
-//     // float3* res = sortInputIntoGPU(pointsVector);
-
-//     // for (int i = 0; i < pointsVector.size(); i++){
-//     //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
-//     // }
-
-//     // cudaFree(res);
-
-//     return 0;
-// }
-
-int main() {
-
-    int nbPoints = 9;
-    float3 a = make_float3(0.0, 0.0, 0.0);
-    float3 b = make_float3(1.0, 0.5, 1.0);
-    float3 c = make_float3(2.0, 0.0, 2.0);
-    float3 d = make_float3(0.5, 1.0, 3.0);
-    float3 e = make_float3(1.0, 1.0, 4.0);
-    float3 f = make_float3(1.5, 1.0, 5.0);
-    float3 g = make_float3(0.0, 2.0, 6.0);
-    float3 h = make_float3(1.0, 1.5, 7.0);
-    float3 i = make_float3(2.0, 2.0, 8.0);
-
-    float3 points[nbPoints];
-    points[0] = a;
-    points[1] = b;
-    points[2] = c;
-    points[3] = d;
-    points[4] = e;
-    points[5] = f;
-    points[6] = g;
-    points[7] = h;
-    points[8] = i;
-
-    int nbMaxTriangles = 2*nbPoints - 2;
-    int nbMaxEdges = 3*nbMaxTriangles;
-
-    edge edgeList[nbMaxEdges]; //Third int --> 0:init | 1:used in way x -> y | -1:used for the way y -> x
-    edgeList[0] = {points[0], points[3], 0};
-    edgeList[1] = {points[3], points[6], 0};
-    edgeList[2] = {points[2], points[5], 0};
-    edgeList[3] = {points[5], points[8], 0};
-
-
-    int3 triangleList[nbMaxTriangles];
-
-    int nbTriangles = parDeTri(points, edgeList, triangleList, 9, 4);
-
-    for (int i = 0; i < nbTriangles; i++){
-        std::cout << "A: " << triangleList[i].x << " B: " << triangleList[i].y << " C: " << triangleList[i].z << std::endl;
+    while(inputFile >> x >> y) {
+        // Only push if the point is not over another
+        long unsigned int hashValue = hash(x, y);
+        if (!pointsSet.count(hashValue)) {
+            pointsSet.insert(hashValue);
+            pointsVector.push_back({x, y, * (float *) &i});
+            i++;
+        }
     }
+
+    std::cout << "Loaded file with " << pointsVector.size() << " distinct points\n" << std::endl;
+    inputFile.close();
+
+    return pointsVector;
+    
+}
+
+int main(int argc, char *argv[]) {
+
+    // arguments reading and errors (filename)
+    if (argc < 2) {
+        std::cout << "No input file provided" <<std::endl;
+        return 1;
+    }
+
+    // Read original values
+    std::vector<float3> pointsVector = readFile(argv[1]);
+
+    // CPU Sorting values according to an axis
+    // std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+
+    float3 *pointsOnGPU;
+    long unsigned int mem = sizeof(float3) * pointsVector.size();
+    cudaMalloc((void**)&pointsOnGPU, mem);
+    cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
+    sortArray(&pointsOnGPU, pointsVector.size());
+
+    // DEBUG (copy back & print)
+    cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
+    for (int i = 0; i < pointsVector.size(); i++){
+        std::cout << "Index :" << * (int *) &(pointsVector[i].z) << " X :" << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    } 
+
+    // // Get GPU array of projected points
+    // float3* proj = projection(pointsOnGPU, pointsVector.size());
+    // cudaFree(proj);
+
+    // float3* res = sortInputIntoGPU(pointsVector);
+
+    // for (int i = 0; i < pointsVector.size(); i++){
+    //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    // }
+
+    // cudaFree(res);
 
     return 0;
 }
+
+// CPU time
+// auto start = high_resolution_clock::now();
+// auto elapse = std::chrono::system_clock::now() - start;
+// auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
