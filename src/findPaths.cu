@@ -1,4 +1,6 @@
-#define THRESHOLD 128 // TODO WHICH VALUE?
+#include "tools.cu"
+
+#define THRESHOLD 5 // TODO WHICH VALUE?
 #define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
@@ -6,7 +8,11 @@
 // Macro to test if we turn clockwise or anti-clockwise
 #define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
 
-__global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, int nbPoints, int roundId) {
+__global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths, int nbPoints, int roundId) {
+
+    // Buffer contains multiple lines, each is a different buffer
+    float3 *projected = buffers;
+    float3 *pathsAsPoints = &buffers[nbPoints];
 
     // ID used for the reference point around which other points are projected for this block
     int refPoint = (2 * blockIdx.x + 1) * nbPoints / (2 << roundId);
@@ -64,8 +70,7 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
     __syncthreads();
 
     // -- Lower Convex Hull (Sequential algorithm - Graham scan)
-    // Writing the stack directly on global memory because of unfixed size
-
+    // Writing the stack on a buffer then converting into a path of edges
     if (threadIdx.x == 0) {
         // Find the lowest and highest x-coordinate (and highest y-coordinate to handle '==' case)
         // The algorithm will start from the rightmost point and end when the leftmost point is added
@@ -82,14 +87,14 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
             }
         }
 
-        paths[sliceBlockBeg] = projected[rightmostPointIndex];
+        pathsAsPoints[sliceBlockBeg] = projected[rightmostPointIndex];
         int stackIndex = 1; // Used to track stack. Starts at one because we already filled first value
         int maxStackIndex = 1; // Used to clean stack at the end by rewriting end values if unused
 
         for (int pt=0; pt < sliceBlockEnd - sliceBlockBeg - 1; pt++) {  // Maximum number of loops is number of points - 1
             // Pop points from stack until we turn clockwise for the next point
-            while (stackIndex > 1 && ccw(paths[sliceBlockBeg + stackIndex - 2],
-                                         paths[sliceBlockBeg + stackIndex - 1],
+            while (stackIndex > 1 && ccw(pathsAsPoints[sliceBlockBeg + stackIndex - 2],
+                                         pathsAsPoints[sliceBlockBeg + stackIndex - 1],
                                          projected[sliceBlockBeg + pt])) {
                 //printf("Removing point %u from path\n", * (int*) &projected[sliceBlockBeg + stackIndex - 1].z);
                 stackIndex--;
@@ -97,7 +102,7 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
             //printf("Adding point %u to path\n", * (int*) &projected[sliceBlockBeg + pt].z);
 
             // Add new point to path
-            paths[sliceBlockBeg + stackIndex] = projected[sliceBlockBeg + pt];
+            pathsAsPoints[sliceBlockBeg + stackIndex] = projected[sliceBlockBeg + pt];
             stackIndex++;
             if (stackIndex > maxStackIndex) maxStackIndex++;
 
@@ -111,16 +116,22 @@ __global__ void projectSlice(float3 *points, float3 *projected, float3 *paths, i
         printf("Path done ! Length : %u / %u\t (Went to %u)\n",
                stackIndex, sliceBlockEnd - sliceBlockBeg, maxStackIndex);
 
-        // Clean end of stack
-        while (stackIndex < maxStackIndex) {
-            paths[sliceBlockBeg + stackIndex] = make_float3(-1, -1, -1);
-            stackIndex++;
+        // We know for such the path has at least one edges so two points
+        float3 prevPoint;
+        float3 curPoint = pathsAsPoints[sliceBlockBeg];
+
+        for (int i=sliceBlockBeg; i<sliceBlockBeg+stackIndex-1; i++) {
+            prevPoint = curPoint;
+            curPoint = pathsAsPoints[i+1];
+            paths[i] = {prevPoint, curPoint, UNUSED};
         }
+
+        paths[sliceBlockBeg+stackIndex-1] = {prevPoint, curPoint, INVALID};
     }
     __syncthreads();
 }
 
-int3* createPaths(float3 *points, int nbPoints) {
+struct edge* createPaths(float3 *points, int nbPoints) {
 
     // Find the number of subproblems according to the threshold of the
     // maximum number of points per subproblems. This number is always a power of 2
@@ -133,16 +144,18 @@ int3* createPaths(float3 *points, int nbPoints) {
     std::cout << "nb & log2 " << nbSubproblems << " " << log2nbSubproblems << std::endl;
 
     // Create an array to store every paths.
-    // Right now, contains points next to each other
-    float3* paths;    // log2(nbSubproblems) * nbPoints Array containing every paths.
-                    // First line contains 1st path (max length nbPoints)
-                    // Second line contains 2nd and 3rd path (each max length nbPoints/2)
-                    // ... with every power of two
-    cudaMalloc((void **)&paths, nbPoints * log2nbSubproblems * sizeof(float3));
+    struct edge* paths;   // log2(nbSubproblems) * nbPoints Array containing every edges.
+                          // (There are at most x points per line so x-1 edges + a final edge stored to tell it's the end of the path)
+                          // First line contains 1st path (max length nbPoints)
+                          // Second line contains 2nd and 3rd path (each max length nbPoints/2)
+                          // ... with every power of two
+    cudaMalloc((void **)&paths, nbPoints * log2nbSubproblems * sizeof(struct edge));
 
-    // Create a buffer array to store projected points. Rewritten at each round
-    float3* bufferProjection;
-    cudaMalloc((void **)&bufferProjection, nbPoints * sizeof(float3));
+    // Create a buffer array to store different data
+    // First line:  projected points (Rewritten at each round)
+    // Second line: stacks used to create the list of points used for a path
+    float3* buffers;
+    cudaMalloc((void **)&buffers, 2 * nbPoints * sizeof(float3));
 
     // Recursively find a path and cut into two subproblems
     for(int i=0, nbBlocks=1; nbBlocks < nbSubproblems; i++, nbBlocks<<= 1) {
@@ -150,7 +163,7 @@ int3* createPaths(float3 *points, int nbPoints) {
         if (nbThreads < 1) nbThreads = 1;
 
         // Project the complete array
-        projectSlice<<<nbBlocks, nbThreads>>>(points, bufferProjection, &paths[nbPoints * i], nbPoints, i);
+        projectSlice<<<nbBlocks, nbThreads>>>(points, buffers, &paths[nbPoints * i], nbPoints, i);
         cudaDeviceSynchronize();
 
         // // DEBUG PRINT PROJECTED ARRAY
@@ -162,20 +175,23 @@ int3* createPaths(float3 *points, int nbPoints) {
         // } 
     }
 
-    // // DEBUG PRINT PROJECTED ARRAY
-    // float3 p[nbPoints * log2nbSubproblems];
-    // cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(float3), cudaMemcpyDeviceToHost);
-    // for (int i = 0; i < log2nbSubproblems; i++) {
-    //     for (int j = 0; j < nbPoints; j++) {
-    //         if (p[i*nbPoints + j].z >= 0) {
-    //             std::cout << "(" << p[i*nbPoints + j].x << "," << p[i*nbPoints + j].y << "," << * (int*) &(p[i*nbPoints + j].z) << ")";
-    //         } else {
-    //             std::cout << ".";
-    //         }
-    //     }
-    //     std::cout << std::endl;
-    // }
+    // DEBUG PRINT PROJECTED ARRAY
+    struct edge p[nbPoints * log2nbSubproblems];
+    cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < log2nbSubproblems; i++) {
+        for (int j = 0; j < nbPoints; j++) {
+            edge e = p[i*nbPoints + j];
+            if (e.usage == UNUSED) {
+                std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
+            } else if (e.usage == INVALID) {
+                std::cout << "|";
+            } else {
+                std::cout << ".";
+            }
+        }
+        std::cout << std::endl;
+    }
+    cudaFree(buffers);
 
-    cudaFree(bufferProjection);
-    return 0;
+    return paths;
 }
