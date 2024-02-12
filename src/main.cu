@@ -5,12 +5,14 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
-#include "mesh.cu"
+#include "tools.cu"
 #include "sort_array.cu"
 #include "projection.cu"
-#include "parDeTri.cu"
+#include "triangulation.cu"
 
 using namespace std::chrono;
+
+#define nbTriangles 50
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
