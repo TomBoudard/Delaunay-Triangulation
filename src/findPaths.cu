@@ -1,10 +1,11 @@
 #include "tools.cu"
 
 #define THRESHOLD 10 // TODO WHICH VALUE?
-#define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
+#define NB_MAX_THREADS 4 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
 #define biggerPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
+#define equalPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
 // Macro to test if we turn clockwise or anti-clockwise
 #define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
 
@@ -12,7 +13,7 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
 
     // Buffer contains multiple lines, each is a different buffer
     float3 *projected = buffers;
-    float3 *pathsAsPoints = &buffers[nbPoints];
+    float3 *pathsAsPoints = &buffers[2*nbPoints];
 
     // ID used for the reference point around which other points are projected for this block
     int refPoint = (2 * blockIdx.x + 1) * nbPoints / (2 << roundId);
@@ -27,7 +28,10 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
     int sliceThreadBeg = (int) ((float) sliceBlockBeg * (1-ratio) + (float) sliceBlockEnd * ratio);
     int sliceThreadEnd = (int) ((float) sliceBlockBeg * (1-ratio2) + (float) sliceBlockEnd * ratio2);
 
-    // -- Projection around refPoint on the buffer projection array
+
+    // ---------------------------------------------------------------
+    // -- Projection around refPoint on the buffer projection array --
+    // ---------------------------------------------------------------
     float3 refPt = points[refPoint];
     for(int ptId = sliceThreadBeg; ptId < sliceThreadEnd; ptId++) {
 
@@ -39,85 +43,146 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
 
         projected[ptId] = make_float3(deltaY, dist, pt.z);
     }
-    // printf("Round %d, Block %d, Th %d\t will project [%d, %d[ on %d\n", roundId, blockIdx.x, threadIdx.x,
-    //     sliceThreadBeg, sliceThreadEnd, refPoint);
+    __syncthreads();
 
-    // -- Sorting points by polar angle
-    // TODO BETTER SORT ALGORITHM
-    if (threadIdx.x == 0) {
-        // Find the lowest x-coordinate (and highest y-coordinate if necessary)
-        float3 rightmostPoint = projected[sliceBlockBeg];
+    // -----------------------------------------------------------------------
+    // -- Sorting points by polar angle with the highest x-coordinate point --
+    // -----------------------------------------------------------------------
 
-        for (int r=sliceBlockBeg + 1; r < sliceBlockEnd; r++) {
-            if ((projected[r].x > rightmostPoint.x) ||
-                (projected[r].x == rightmostPoint.x && projected[r].y > rightmostPoint.y)) {
-                rightmostPoint = projected[r];
-            }
-        }
+    // ## First step: Find the highest x-coordinate point (and highest y-coordinate if necessary)
+    float3 rightmostPoint = projected[sliceBlockBeg];
 
-        // Sort points by polar angle with leftmost point
-        // TODO "if several points have the same polar angle then only keep the farthest"
-        for (int r=0; r < sliceBlockEnd - sliceBlockBeg; r++) {
-            for (int n=sliceBlockBeg; n < sliceBlockEnd - r; n++) {
-                if (biggerPolarAngle(projected[n], projected[n+1], rightmostPoint)) {
-                    float3 tmp = projected[n+1];
-                    projected[n+1] = projected[n];
-                    projected[n] = tmp;
-                }
-            }
+    for (int r=sliceBlockBeg + 1; r < sliceBlockEnd; r++) {
+        if ((projected[r].x > rightmostPoint.x) ||
+            (projected[r].x == rightmostPoint.x && projected[r].y > rightmostPoint.y)) {
+            rightmostPoint = projected[r];
         }
     }
     __syncthreads();
 
-    // -- Lower Convex Hull (Sequential algorithm - Graham scan)
-    // Writing the stack on a buffer then converting into a path of edges
+    // ## Second step: Sort points by polar angle with reference point
+    // Done with fusion sort and by alternating between two buffers
+    float3 *buff[2] = {buffers, &buffers[nbPoints]};
+    int current_buffer = 0; // Starts on projected points buffer
+
+    // Each core sorts its slice of points. Starts by merging arrays of length 1, then 2, 4, ...
+    for (int size = 1; size < sliceThreadEnd - sliceThreadBeg; size <<= 1) {
+        // For given length, sorts sequentially every array of this length in the slice
+        for (int index=sliceThreadBeg; index < sliceThreadEnd; index += 2*size) {
+            int firstPointer = index;
+            int secondPointer = index + size;
+
+            for (int i=index; i < min(sliceThreadEnd, index + 2 * size); i++) {
+                if ((secondPointer == index + 2 * size || secondPointer >= sliceThreadEnd) ||
+                    (!(firstPointer == index + size) && biggerPolarAngle(buff[current_buffer][secondPointer],
+                                                                         buff[current_buffer][firstPointer],
+                                                                         rightmostPoint))) {
+                    buff[1-current_buffer][i] = buff[current_buffer][firstPointer];
+                    firstPointer++;
+                } else {
+                    buff[1-current_buffer][i] = buff[current_buffer][secondPointer];
+                    secondPointer++;
+                }
+            }
+        }
+        current_buffer = 1 - current_buffer;
+    }
+    __syncthreads();
+
+    // Merging sorted slices (log2(blockDim.x) steps), each time using two times less cores
+    for (uint r=2; r<=blockDim.x; r<<=1) {
+        if (threadIdx.x%r == 0) {
+
+            // Merges two sorted slices (first one starting at firstPointer, second at secondPointer)
+            float ratio3 = (float) (threadIdx.x+(r>>1)) / blockDim.x;
+            int firstPointer = sliceThreadBeg;
+            const int secondPointerStart = (int) ((float) sliceBlockBeg * (1-ratio3) + (float) sliceBlockEnd * ratio3);
+            int secondPointer = secondPointerStart;
+
+            float ratio4 = (float) (threadIdx.x+r) / blockDim.x;
+            int sliceEnd = (int) ((float) sliceBlockBeg * (1-ratio4) + (float) sliceBlockEnd * ratio4);
+
+            for (int i=sliceThreadBeg; i < sliceEnd; i++) {
+                if ((secondPointer >= sliceEnd) ||
+                    (!(firstPointer == secondPointerStart) && biggerPolarAngle(buff[current_buffer][secondPointer],
+                                                                        buff[current_buffer][firstPointer],
+                                                                        rightmostPoint))) {
+                    buff[1-current_buffer][i] = buff[current_buffer][firstPointer];
+                    firstPointer++;
+                } else {
+                    buff[1-current_buffer][i] = buff[current_buffer][secondPointer];
+                    secondPointer++;
+                }
+            }
+
+        }
+        __syncthreads();
+        current_buffer = 1 - current_buffer;
+    }
+
+    // DEBUG PRINT
+    if (threadIdx.x == 0) {
+        for (int i=sliceBlockBeg; i<sliceBlockEnd; i++) {
+            printf("%u %u (%f, %f)   \t(Angle : %f)\n", blockIdx.x,
+                * (int*) &buff[current_buffer][i].z, buff[current_buffer][i].x, buff[current_buffer][i].y,
+                atan2(buff[current_buffer][i].x - rightmostPoint.x, buff[current_buffer][i].y - rightmostPoint.y));
+        }
+    }
+
+    // ------------------------------------------------------------
+    // -- Lower Convex Hull (Sequential algorithm - Graham scan) --
+    // ------------------------------------------------------------
+
+    // (Writing the stack on a buffer then converting into a path of edges)
     if (threadIdx.x == 0) {
         // Find the lowest and highest x-coordinate (and highest y-coordinate to handle '==' case)
         // The algorithm will start from the rightmost point and end when the leftmost point is added
         int leftmostPointIndex = sliceBlockBeg;
         int rightmostPointIndex = sliceBlockBeg;
+        float3* buffer_used = buff[current_buffer];
 
         for (int r=sliceBlockBeg + 1; r < sliceBlockEnd; r++) {
-            if ((projected[r].x < projected[leftmostPointIndex].x) ||
-                (projected[r].x == projected[leftmostPointIndex].x && projected[r].y > projected[leftmostPointIndex].y)) {
+            if ((buffer_used[r].x < buffer_used[leftmostPointIndex].x) ||
+                (buffer_used[r].x == buffer_used[leftmostPointIndex].x && buffer_used[r].y > buffer_used[leftmostPointIndex].y)) {
                 leftmostPointIndex = r;
-            } else if ((projected[r].x > projected[leftmostPointIndex].x) ||
-                (projected[r].x == projected[leftmostPointIndex].x && projected[r].y > projected[leftmostPointIndex].y)) {
+            } else if ((buffer_used[r].x > buffer_used[leftmostPointIndex].x) ||
+                (buffer_used[r].x == buffer_used[leftmostPointIndex].x && buffer_used[r].y > buffer_used[leftmostPointIndex].y)) {
                 rightmostPointIndex = r;
             }
         }
 
-        pathsAsPoints[sliceBlockBeg] = projected[rightmostPointIndex];
+        pathsAsPoints[sliceBlockBeg] = buffer_used[rightmostPointIndex];
         int stackIndex = 1; // Used to track stack. Starts at one because we already filled first value
         int maxStackIndex = 1; // Used to clean stack at the end by rewriting end values if unused
 
-        for (int pt=0; pt < sliceBlockEnd - sliceBlockBeg - 1; pt++) {  // Maximum number of loops is number of points - 1
+        // Maximum number of loops is number of points - 1
+        for (int pt=0; pt < sliceBlockEnd - sliceBlockBeg - 1; pt++) {
             // Skip rightmostPointIndex
             if (sliceBlockBeg + pt == rightmostPointIndex) continue;
 
             // Pop points from stack until we turn clockwise for the next point
             while (stackIndex > 1 && ccw(pathsAsPoints[sliceBlockBeg + stackIndex - 2],
                                          pathsAsPoints[sliceBlockBeg + stackIndex - 1],
-                                         projected[sliceBlockBeg + pt])) {
-                //printf("Removing point %u from path\n", * (int*) &projected[sliceBlockBeg + stackIndex - 1].z);
+                                         buffer_used[sliceBlockBeg + pt])) {
+                //printf("Removing point %u from path\n", * (int*) &buffer_used[sliceBlockBeg + stackIndex - 1].z);
                 stackIndex--;
             }
-            //printf("Adding point %u to path\n", * (int*) &projected[sliceBlockBeg + pt].z);
+            //printf("Adding point %u to path\n", * (int*) &buffer_used[sliceBlockBeg + pt].z);
 
             // Add new point to path
-            pathsAsPoints[sliceBlockBeg + stackIndex] = projected[sliceBlockBeg + pt];
+            pathsAsPoints[sliceBlockBeg + stackIndex] = buffer_used[sliceBlockBeg + pt];
             stackIndex++;
             if (stackIndex > maxStackIndex) maxStackIndex++;
 
             // End loop if we hit the last point of the path
             if (sliceBlockBeg + pt == leftmostPointIndex) {
-                //printf("End of path ! Added point %u\n", * (int*) &projected[leftmostPointIndex].z);
+                //printf("End of path ! Added point %u\n", * (int*) &buffer_used[leftmostPointIndex].z);
                 break;
             }
         }
 
-        printf("Path done ! Length : %u / %u\t (Went to %u)\n",
-               stackIndex, sliceBlockEnd - sliceBlockBeg, maxStackIndex);
+        // printf("Path done ! Length : %u / %u\t (Went to %u)\n",
+        //        stackIndex, sliceBlockEnd - sliceBlockBeg, maxStackIndex);
 
         // We know for such the path has at least one edges so two points
         float3 prevPoint;
@@ -155,10 +220,10 @@ struct edge* createPaths(float3 *points, int nbPoints) {
     cudaMalloc((void **)&paths, nbPoints * log2nbSubproblems * sizeof(struct edge));
 
     // Create a buffer array to store different data
-    // First line:  projected points (Rewritten at each round)
-    // Second line: stacks used to create the list of points used for a path
+    // Buffer 1&2 :  used for projection & sorting (Rewritten at each round)
+    // Buffer 3:     stacks used to create the list of points used for a path
     float3* buffers;
-    cudaMalloc((void **)&buffers, 2 * nbPoints * sizeof(float3));
+    cudaMalloc((void **)&buffers, 3 * nbPoints * sizeof(float3));
 
     // Recursively find a path and cut into two subproblems
     for(int i=0, nbBlocks=1; nbBlocks < nbSubproblems; i++, nbBlocks<<= 1) {
@@ -178,23 +243,23 @@ struct edge* createPaths(float3 *points, int nbPoints) {
         // } 
     }
 
-    // DEBUG PRINT PROJECTED ARRAY
-    struct edge p[nbPoints * log2nbSubproblems];
-    cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < log2nbSubproblems; i++) {
-        for (int j = 0; j < nbPoints; j++) {
-            edge e = p[i*nbPoints + j];
-            if (e.usage == UNUSED) {
-                std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
-            } else if (e.usage == INVALID) {
-                std::cout << "|";
-            } else {
-                std::cout << ".";
-            }
-        }
-        std::cout << std::endl;
-    }
-    cudaFree(buffers);
+    // // DEBUG PRINT PROJECTED ARRAY
+    // struct edge p[nbPoints * log2nbSubproblems];
+    // cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
+    // for (int i = 0; i < log2nbSubproblems; i++) {
+    //     for (int j = 0; j < nbPoints; j++) {
+    //         edge e = p[i*nbPoints + j];
+    //         if (e.usage == UNUSED) {
+    //             std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
+    //         } else if (e.usage == INVALID) {
+    //             std::cout << "|";
+    //         } else {
+    //             std::cout << ".";
+    //         }
+    //     }
+    //     std::cout << std::endl;
+    // }
+    // cudaFree(buffers);
 
     return paths;
 }
