@@ -5,14 +5,14 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
-#include "mesh.cu"
+#include "tools.cu"
 #include "sort_array.cu"
-#include "projection.cu"
 #include "parDeTri.cu"
+#include "findPaths.cu"
 
 using namespace std::chrono;
 
-//CPU Compare function
+// CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
 bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
@@ -61,29 +61,28 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Read original values
+    // -- Read original values
     std::vector<float3> pointsVector = readFile(argv[1]);
 
+    // -- Sort
+
     // CPU Sorting values according to an axis
-    // std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 
     float3 *pointsOnGPU;
     long unsigned int mem = sizeof(float3) * pointsVector.size();
     cudaMalloc((void**)&pointsOnGPU, mem);
     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
-    sortArray(&pointsOnGPU, pointsVector.size());
+    // sortArray(&pointsOnGPU, pointsVector.size());
 
-    // DEBUG (copy back & print)
-    cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
-    for (int i = 0; i < pointsVector.size(); i++){
-        std::cout << "Index :" << * (int *) &(pointsVector[i].z) << " X :" << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
-    } 
+    // // DEBUG (copy back & print)
+    // cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
+    // for (int i = 0; i < pointsVector.size(); i++){
+    //     std::cout << "Index :" << * (int *) &(pointsVector[i].z) << " X :" << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
+    // } 
 
-    // // Get GPU array of projected points
-    // float3* proj = projection(pointsOnGPU, pointsVector.size());
-    // cudaFree(proj);
-
-    // float3* res = sortInputIntoGPU(pointsVector);
+    struct edge* paths = createPaths(pointsOnGPU, pointsVector.size());
+    cudaFree(paths);
 
     // for (int i = 0; i < pointsVector.size(); i++){
     //     std::cout << "Index :" << pointsVector[i].index << " X : " << pointsVector[i].x << " Y :" << pointsVector[i].y << std::endl;
