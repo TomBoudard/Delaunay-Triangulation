@@ -7,6 +7,8 @@
 #include <chrono>
 #include "tools.cu"
 #include "sort_array.cu"
+#include "parDeTri.cu"
+#include "findPaths.cu"
 #include "projection.cu"
 #include "triangulation.cu"
 #include "findPaths.cu"
@@ -65,13 +67,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Read original values
+    // -- Read original values
     std::vector<float3> pointsVector = readFile(argv[1]);
     int nbPoints = pointsVector.size();
 
     std::cout << "Nb points : " << nbPoints << std::endl;
 
     // CPU Sorting values according to an axis
+    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 
     float3 *pointsOnGPU;
