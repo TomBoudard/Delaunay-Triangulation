@@ -9,10 +9,14 @@
 #include "sort_array.cu"
 #include "parDeTri.cu"
 #include "findPaths.cu"
+#include "projection.cu"
+#include "triangulation.cu"
 
 using namespace std::chrono;
 
-// CPU Compare function
+#define nbTriangles 50
+
+//CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
 bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
