@@ -1,6 +1,6 @@
 #include "tools.cu"
 
-#define THRESHOLD 5 // TODO WHICH VALUE?
+#define THRESHOLD 10 // TODO WHICH VALUE?
 #define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
@@ -92,6 +92,9 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
         int maxStackIndex = 1; // Used to clean stack at the end by rewriting end values if unused
 
         for (int pt=0; pt < sliceBlockEnd - sliceBlockBeg - 1; pt++) {  // Maximum number of loops is number of points - 1
+            // Skip rightmostPointIndex
+            if (sliceBlockBeg + pt == rightmostPointIndex) continue;
+
             // Pop points from stack until we turn clockwise for the next point
             while (stackIndex > 1 && ccw(pathsAsPoints[sliceBlockBeg + stackIndex - 2],
                                          pathsAsPoints[sliceBlockBeg + stackIndex - 1],
