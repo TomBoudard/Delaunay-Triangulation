@@ -28,7 +28,7 @@ struct edge{
     int8_t usage; // -1 : Invalid | 0: Unused | 1: Used once | 2: Used twice (can't be used anymore)
 };
 
-bool operator==(edge const& a, edge const& b){
+__device__ bool operator==(edge const& a, edge const& b){
     if (a.x.z == b.x.z && a.y.z == b.y.z){
         return true;
     }
@@ -38,7 +38,7 @@ bool operator==(edge const& a, edge const& b){
     return false;
 }
 
-bool operator==(int3 const& a, int3 const& b){
+__device__ bool operator==(int3 const& a, int3 const& b){
     if (a.x == b.x && a.y == b.y && a.z == b.z){
         return true;
     }
@@ -70,11 +70,11 @@ bool operator==(int3 const& a, int3 const& b){
 //     return true;
 // }
 
-float3 operator-(float3 const& a, float3 const& b){
+__device__ float3 operator-(float3 const& a, float3 const& b){
     return make_float3(a.x-b.x, a.y-b.y, a.z-b.z);
 }
 
-float length(float3 a){
+__device__ float length(float3 a){
     return a.x*a.x + a.y*a.y;
 };
 
