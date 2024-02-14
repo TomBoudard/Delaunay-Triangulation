@@ -16,7 +16,6 @@ using namespace std::chrono;
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
-bool yCompare (float3 a, float3 b){return a.y < b.y;}
 
 // Returns unique 64-bits int with 2 32-bits float
 long unsigned int hash(float x, float y) {
@@ -132,3 +131,17 @@ int main(int argc, char *argv[]) {
 // auto start = high_resolution_clock::now();
 // auto elapse = std::chrono::system_clock::now() - start;
 // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
+
+// GPU time
+// cudaEvent_t myEvent, laterEvent;
+// cudaEventCreate(&myEvent);
+// cudaEventRecord(myEvent, 0);
+// cudaEventSynchronize(myEvent);
+// int dimGrid = (nbPts+N-1)/N;   // Nb of blocks
+// int dimBlock = N;
+// projectPoints<<<dimGrid, dimBlock>>>(pointsOnGPU, pointsProjected, nbPts, true);
+// cudaDeviceSynchronize();
+
+// cudaEventCreate(&laterEvent);
+// cudaEventRecord(laterEvent, 0);
+// cudaEventSynchronize(laterEvent);
