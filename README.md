@@ -34,12 +34,12 @@ Example:
 
 Usage can be found with the help argument (`-h` or `--help`).
 
+## Triangulation
+
+Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main input_file`.
+
 ## Visualization
 
 `./render_svg.py` can be used to generate a `.svg` output for a given dataset and triangles.
 
 Usage : `./render_svg.py coords_list trig_list`
-
-## Triangulation
-
-Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main input_file`.

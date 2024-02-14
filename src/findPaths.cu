@@ -41,7 +41,7 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
         float deltaX = refPt.x - pt.x;
         float dist = deltaY * deltaY + deltaX * deltaX;
 
-        projected[ptId] = make_float3(deltaY, dist, pt.z);
+        projected[ptId] = make_float3(deltaY, dist, *(float*) &ptId);
     }
     __syncthreads();
 
@@ -103,16 +103,18 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
             int sliceEnd = (int) ((float) sliceBlockBeg * (1-ratio4) + (float) sliceBlockEnd * ratio4);
 
             for (int i=sliceThreadBeg; i < sliceEnd; i++) {
+                float3 index;
                 if ((secondPointer >= sliceEnd) ||
                     (!(firstPointer == secondPointerStart) && biggerPolarAngle(buff[current_buffer][secondPointer],
                                                                         buff[current_buffer][firstPointer],
                                                                         rightmostPoint))) {
-                    buff[1-current_buffer][i] = buff[current_buffer][firstPointer];
+                    index = buff[current_buffer][firstPointer];
                     firstPointer++;
                 } else {
-                    buff[1-current_buffer][i] = buff[current_buffer][secondPointer];
+                    index = buff[current_buffer][secondPointer];
                     secondPointer++;
                 }
+                buff[1-current_buffer][i] = index;
             }
 
         }
@@ -120,14 +122,14 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
         current_buffer = 1 - current_buffer;
     }
 
-    // DEBUG PRINT
-    if (threadIdx.x == 0) {
-        for (int i=sliceBlockBeg; i<sliceBlockEnd; i++) {
-            printf("%u %u (%f, %f)   \t(Angle : %f)\n", blockIdx.x,
-                * (int*) &buff[current_buffer][i].z, buff[current_buffer][i].x, buff[current_buffer][i].y,
-                atan2(buff[current_buffer][i].x - rightmostPoint.x, buff[current_buffer][i].y - rightmostPoint.y));
-        }
-    }
+    // // DEBUG PRINT
+    // if (threadIdx.x == 0) {
+    //     for (int i=sliceBlockBeg; i<sliceBlockEnd; i++) {
+    //         printf("%u %u (%f, %f)   \t(Angle : %f)\n", blockIdx.x,
+    //             * (int*) &buff[current_buffer][i].z, buff[current_buffer][i].x, buff[current_buffer][i].y,
+    //             atan2(buff[current_buffer][i].x - rightmostPoint.x, buff[current_buffer][i].y - rightmostPoint.y));
+    //     }
+    // }
 
     // ------------------------------------------------------------
     // -- Lower Convex Hull (Sequential algorithm - Graham scan) --
@@ -188,11 +190,11 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
 
         // We know for such the path has at least one edges so two points
         float3 prevPoint;
-        float3 curPoint = pathsAsPoints[sliceBlockBeg];
+        float3 curPoint = points[*(int*) &pathsAsPoints[sliceBlockBeg].z];
 
         for (int i=sliceBlockBeg; i<sliceBlockBeg+stackIndex-1; i++) {
             prevPoint = curPoint;
-            curPoint = pathsAsPoints[i+1];
+            curPoint = points[*(int*) &pathsAsPoints[i+1].z];
             paths[i] = {prevPoint, curPoint, UNUSED};
         }
 
@@ -224,7 +226,7 @@ struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int lo
         int nbThreads = NB_MAX_THREADS/nbBlocks; // Every block can be done in parallel
         if (nbThreads < 1) nbThreads = 1;
 
-        // Project the complete array
+        // Project the complete array. "points" is read-only
         projectSlice<<<nbBlocks, nbThreads>>>(points, buffers, &paths[nbPoints * i], nbPoints, i);
         cudaDeviceSynchronize();
     }
@@ -236,7 +238,7 @@ struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int lo
     //     for (int j = 0; j < nbPoints; j++) {
     //         edge e = p[i*nbPoints + j];
     //         if (e.usage == UNUSED) {
-    //             std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
+    //             std::cout << "[" << *(int *) &(e.x.z) << " (" << e.x.x << ", " << e.x.y << "), " << *(int *) &(e.y.z) << " (" << e.y.x << ", " << e.y.y << ") " << "]";
     //         } else if (e.usage == INVALID) {
     //             std::cout << "|";
     //         } else {
