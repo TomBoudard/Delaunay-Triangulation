@@ -1,6 +1,5 @@
 #include "tools.cu"
 
-#define THRESHOLD 5 // TODO WHICH VALUE?
 #define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
@@ -202,15 +201,7 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
     __syncthreads();
 }
 
-struct edge* createPaths(float3 *points, int nbPoints) {
-
-    // Find the number of subproblems according to the threshold of the
-    // maximum number of points per subproblems. This number is always a power of 2
-    int nbSubproblems = 1, log2nbSubproblems = 0;
-    while ((nbSubproblems * THRESHOLD) < nbPoints) {
-        log2nbSubproblems++;
-        nbSubproblems <<= 1;
-    }
+struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int log2nbSubproblems) {
 
     std::cout << "nb & log2 " << nbSubproblems << " " << log2nbSubproblems << std::endl;
 
