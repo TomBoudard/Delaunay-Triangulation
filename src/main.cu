@@ -43,7 +43,7 @@ std::vector<float3> readFile(std::string nameFile){
         long unsigned int hashValue = hash(x, y);
         if (!pointsSet.count(hashValue)) {
             pointsSet.insert(hashValue);
-            pointsVector.push_back({x, y, * (float *) &i});
+            pointsVector.push_back(make_float3(x, y, * (float *) &i));
             i++;
         }
     }
@@ -70,7 +70,6 @@ int main(int argc, char *argv[]) {
     std::cout << "Nb points : " << nbPoints << std::endl;
 
     // CPU Sorting values according to an axis
-    std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
 
     float3 *pointsOnGPU;

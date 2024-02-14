@@ -1,5 +1,7 @@
 #include "tools.cu"
-#include <math_functions.h>
+#include <cuda_runtime.h>
+
+#define sub(a, b)make_float3(a.x - b.x, a.y - b.y, 0)
 
 __device__ float delaunayDistance(float3 const& edgeStart, float3 const& edgeEnd, float3 const& point){
 
@@ -30,9 +32,14 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
     
     printf("TEST START !\n");
 
+
     // IDs of the beginning and end of the slice manipulated by the block
     int sliceBlockBeg = (blockIdx.x) * nbPoints / (nbSubproblems);
     int sliceBlockEnd = ((blockIdx.x + 1)) * nbPoints / (nbSubproblems);
+
+    // for (int i = sliceBlockBeg; i < sliceBlockEnd; i++){
+    //     printf("GIGA DEBUG : %f %f %d \n", points[i].x, points[i].y, *(int*)& points[i].z);
+    // }
 
     int idLeft = ((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x) - 1) - 1)*nbPoints + blockIdx.x%((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x) - 1))*nbPoints/((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x) - 1));
     int idRight = ((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x + 1) - 1) - 1)*nbPoints + (blockIdx.x+1)%((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x + 1) - 1))*nbPoints/((int)log2((double)nbSubproblems) - (__ffs(blockIdx.x + 1) - 1));
@@ -80,13 +87,16 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
         float bestRadius = INFINITY;
         bool triangleFound = false;
         for (int i = sliceBlockBeg; i<sliceBlockEnd; i++){
-            float3 firstVector = currentEdge.y-currentEdge.x;
-            float3 secondVector = points[i]-currentEdge.x;
+            float3 firstVector = currentEdge.y - currentEdge.x;
+            float3 secondVector = points[i] - currentEdge.x;
             float zVectorialProduct = firstVector.x*secondVector.y - firstVector.y*secondVector.x;
-            int pointSide = zVectorialProduct/fabs(zVectorialProduct);
+            int pointSide = zVectorialProduct/fabs(zVectorialProduct); //FIXME If vectorial product is 0
 
-            if(points[i].z != currentEdge.x.z && points[i].z != currentEdge.y.z && pointSide != currentEdge.usage && currentEdge.usage != FULL && !(currentEdge.usage == UNUSED_LEFT && pointSide != -1) && !(currentEdge.usage == UNUSED_RIGHT && pointSide != 1)){
-                float radius = delaunayDistance(currentEdge.x, currentEdge.y, points[i]);                
+            if(points[i].z != currentEdge.x.z && points[i].z != currentEdge.y.z && pointSide != currentEdge.usage && currentEdge.usage != FULL && !(currentEdge.usage == UNUSED_LEFT && pointSide == 1) && !(currentEdge.usage == UNUSED_RIGHT && pointSide == -1)){
+                printf("Block N°%d | Point side: %f  for point (%d)\n", blockIdx.x, zVectorialProduct, *(int*)& points[i].z);
+                printf("Block N°%d | First point = (%f, %f) Second point = (%f, %f), Third point = (%f, %f)", blockIdx.x, currentEdge.x.x, currentEdge.x.y, currentEdge.y.x, currentEdge.y.y, points[i].x, points[i].y);
+                printf("Block N°%d | First vector = (%f, %f) Second vector = (%f, %f)", blockIdx.x, firstVector.x, firstVector.y, secondVector.x, secondVector.y);
+                float radius = delaunayDistance(currentEdge.x, currentEdge.y, points[i]);
                 if (radius < bestRadius){
                     int3 currentTriangle = make_int3(currentEdge.x.z, currentEdge.y.z, points[i].z);
                     bool alreadyExisting = false;
@@ -107,9 +117,7 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
 
         if (triangleFound){
             
-            printf("TEST TRIANGLE FOUND : CHECK VALIDITY !\n");
-            printf("Block N°%d | THIRD POINT: %d \n", blockIdx.x, *(int*)& bestThirdPoint.z);
-            printf("AHAHAAH: %d \n", *(int*)& currentEdge.x.z);
+            printf("Block N°%d | TEST TRIANGLE FOUND : EDGE (%d %d (usage = %d)) with POINT (%d) !\n", blockIdx.x, *(int*)& currentEdge.x.z, *(int*)& currentEdge.y.z, *(int*)& currentEdge.usage, *(int*)& bestThirdPoint.z);
 
             bool validTriangle = true;
             if (bestThirdPointSide == -1){//Means that the current edge is being used from y to x to be used in a direct repere
