@@ -1,13 +1,14 @@
 #include "tools.cu"
 
 
-#define NB_MAX_THREADS 4 // SHOULD BE POWER OF 2
+#define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
 #define biggerPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
-#define equalPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
 // Macro to test if we turn clockwise or anti-clockwise
 #define ccw(A, B, C) (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)>0
+// Macro to test if positions are equal
+#define samePos(A, B) (A.x == B.x && A.y == B.y)
 
 __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths, int nbPoints, int roundId) {
 
@@ -161,13 +162,15 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
             if (sliceBlockBeg + pt == rightmostPointIndex) continue;
 
             // Pop points from stack until we turn clockwise for the next point
-            while (stackIndex > 1 && ccw(pathsAsPoints[sliceBlockBeg + stackIndex - 2],
+            while (stackIndex > 1 && (ccw(pathsAsPoints[sliceBlockBeg + stackIndex - 2],
                                          pathsAsPoints[sliceBlockBeg + stackIndex - 1],
-                                         buffer_used[sliceBlockBeg + pt])) {
-                //printf("Removing point %u from path\n", * (int*) &buffer_used[sliceBlockBeg + stackIndex - 1].z);
+                                         buffer_used[sliceBlockBeg + pt]) ||
+                                     samePos(pathsAsPoints[sliceBlockBeg + stackIndex - 1],
+                                             buffer_used[sliceBlockBeg + pt]))) {
+                // printf("Removing point %u from path\n", * (int*) &buffer_used[sliceBlockBeg + stackIndex - 1].z);
                 stackIndex--;
             }
-            //printf("Adding point %u to path\n", * (int*) &buffer_used[sliceBlockBeg + pt].z);
+            // printf("Adding point %u to path\n", * (int*) &buffer_used[sliceBlockBeg + pt].z);
 
             // Add new point to path
             pathsAsPoints[sliceBlockBeg + stackIndex] = buffer_used[sliceBlockBeg + pt];
@@ -225,33 +228,25 @@ struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int lo
         // Project the complete array
         projectSlice<<<nbBlocks, nbThreads>>>(points, buffers, &paths[nbPoints * i], nbPoints, i);
         cudaDeviceSynchronize();
-
-        // // DEBUG PRINT PROJECTED ARRAY
-        // float3 pt[nbPoints];
-        // cudaMemcpy(pt, bufferProjection, nbPoints * sizeof(float3), cudaMemcpyDeviceToHost);
-        // for (int i = 0; i < nbPoints; i++){
-        //     std::cout << "Index :" << * (int *) &(pt[i].z) << " X :" << pt[i].x << " Y :" << pt[i].y;
-        //     std::cout << " Polar angle with last point :" << atan2(pt[i].x - pt[nbPoints-1].x, pt[i].y - pt[nbPoints-1].y) << std::endl;
-        // } 
     }
 
-    // DEBUG PRINT PROJECTED ARRAY
-    struct edge p[nbPoints * log2nbSubproblems];
-    cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < log2nbSubproblems; i++) {
-        for (int j = 0; j < nbPoints; j++) {
-            edge e = p[i*nbPoints + j];
-            if (e.usage == UNUSED) {
-                std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
-            } else if (e.usage == INVALID) {
-                std::cout << "|";
-            } else {
-                std::cout << ".";
-            }
-        }
-        std::cout << std::endl;
-    }
+    // // DEBUG PRINT PATHS
+    // struct edge p[nbPoints * log2nbSubproblems];
+    // cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
+    // for (int i = 0; i < log2nbSubproblems; i++) {
+    //     for (int j = 0; j < nbPoints; j++) {
+    //         edge e = p[i*nbPoints + j];
+    //         if (e.usage == UNUSED) {
+    //             std::cout << "(" << *(int *) &(e.x.z) << " " << *(int *) &(e.y.z) << ")";
+    //         } else if (e.usage == INVALID) {
+    //             std::cout << "|";
+    //         } else {
+    //             std::cout << ".";
+    //         }
+    //     }
+    //     std::cout << std::endl;
+    // }
+
     cudaFree(buffers);
-
     return paths;
 }
