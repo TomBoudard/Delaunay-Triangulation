@@ -7,6 +7,8 @@
 #define UNUSED 0
 #define USED 1
 #define FULL 2
+#define UNUSED_LEFT 3
+#define UNUSED_RIGHT 4
 
 // bool operator==(int2 const& a, int2 const& b){
 //     if (a.x == b.x && a.y == b.y){

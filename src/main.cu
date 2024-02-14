@@ -6,10 +6,6 @@
 #include <algorithm>
 #include <chrono>
 #include "tools.cu"
-#include "sort_array.cu"
-#include "parDeTri.cu"
-#include "findPaths.cu"
-#include "projection.cu"
 #include "triangulation.cu"
 #include "findPaths.cu"
 
@@ -97,7 +93,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < nbSubproblems; i++){
         for (int j = 0; j < NB_MAX_TRIANGLES; j++){
-            initTriangleList[i*NB_MAX_TRIANGLES + j] = make_int3(2, 0, 0);
+            initTriangleList[i*NB_MAX_TRIANGLES + j] = make_int3(-1, -1, -1);
         }
     }
 
@@ -123,7 +119,7 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyDeviceToHost);
     
     for (int i = 0; i < nbSubproblems*NB_MAX_TRIANGLES; i++){
-        std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].z << " " << initTriangleList[i].z << std::endl;
+        std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].y << " " << initTriangleList[i].z << std::endl;
     }
 
     cudaFree(edgePathsList);
