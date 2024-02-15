@@ -43,3 +43,5 @@ Create a build folder and execute `cmake ..` to generate files used for the algo
 `./render_svg.py` can be used to generate a `.svg` output for a given dataset and triangles.
 
 Usage : `./render_svg.py coords_list trig_list`
+
+_It is possible to uncomment some lines in the Python script to show the circles_

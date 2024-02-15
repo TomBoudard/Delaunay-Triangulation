@@ -1,6 +1,6 @@
 #include "tools.cu"
 
-#define NB_MAX_THREADS 1024 // SHOULD BE POWER OF 2
+#define NB_MAX_THREADS 1024 // TODO SHOULD BE POWER OF 2
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
 #define biggerPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
@@ -198,7 +198,7 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
             paths[i] = {prevPoint, curPoint, UNUSED};
         }
 
-        paths[sliceBlockBeg+stackIndex-1] = {prevPoint, curPoint, INVALID};
+        paths[sliceBlockBeg+stackIndex-1].usage = INVALID;
     }
     __syncthreads();
 }
