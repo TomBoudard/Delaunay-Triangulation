@@ -5,15 +5,17 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
-#include "helper_cuda.cu"
 #include "tools.cu"
 #include "triangulation.cu"
 #include "findPaths.cu"
 
 using namespace std::chrono;
 
-#define NB_MAX_TRIANGLES 200
-#define THRESHOLD 10 // TODO WHICH VALUE?
+#define THRESHOLD 25 // TODO WHICH VALUE?
+
+// For a subproblem of n points, we put a limit of 10*n triangles generated.
+// This is manually fixed because otherwise it would not have any limit and we have limited memory.
+#define NB_MAX_TRIANGLES_PER_PT 10
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
@@ -85,19 +87,21 @@ int main(int argc, char *argv[]) {
     std::vector<float3> pointsVector = readFile(argv[1]);
     int nbPoints = pointsVector.size();
 
+    if (nbPoints < 1) {
+        std::cout << "Input file is empty or does not exist." << std::endl;
+        return 1;
+    }
+
     // CPU Sorting values according to an axis
     std::sort(pointsVector.begin(), pointsVector.end(), xCompare);
+
+    auto start = high_resolution_clock::now();
 
     // Copy points on GPU
     float3 *pointsOnGPU;
     long unsigned int mem = sizeof(float3) * nbPoints;
     cudaMalloc((void**)&pointsOnGPU, mem);
     cudaMemcpy(pointsOnGPU, &pointsVector[0], mem, cudaMemcpyHostToDevice);
-
-    // Find the number of cores of the device
-    cudaDeviceProp deviceProp;
-    cudaGetDeviceProperties(&deviceProp, 0);
-    uint nbCores = deviceProp.multiProcessorCount * _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor);
 
     // Find the number of subproblems according to the threshold of the
     // maximum number of points per subproblems. This number is always a power of 2
@@ -114,44 +118,44 @@ int main(int argc, char *argv[]) {
 
     struct edge* edgePathsList = createPaths(pointsOnGPU, nbPoints, nbSubproblems, log2nbSubproblems);
 
+    int nbMaxTrianglesUsed = thresholdUsed * NB_MAX_TRIANGLES_PER_PT;
+
     int3* triangleList;
-    int3 initTriangleList[nbSubproblems*NB_MAX_TRIANGLES];
+    int3* initTriangleList = new int3[nbSubproblems*nbMaxTrianglesUsed];
 
     struct edge* globalEdgeList;
     int boundMaxEdgePerSubset = (int)(2*nbPoints/nbSubproblems - 2)*3*3;
-    edge initGlobalEdgeList[boundMaxEdgePerSubset*nbSubproblems];
+    edge* initGlobalEdgeList = new edge[boundMaxEdgePerSubset*nbSubproblems];
 
     for (int i = 0; i < boundMaxEdgePerSubset*nbSubproblems; i++){
         initGlobalEdgeList[i].usage = UNUSED;
     }
 
-    cudaMalloc((void**)&triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES); // FIXME Stored contiguously
-    cudaMemcpy(triangleList, initTriangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&triangleList, sizeof(int3)*nbSubproblems*nbMaxTrianglesUsed); // FIXME Stored contiguously
+    cudaMemcpy(triangleList, initTriangleList, sizeof(int3)*nbSubproblems*nbMaxTrianglesUsed, cudaMemcpyHostToDevice);
 
     cudaMalloc((void**)&globalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems);
     cudaMemcpy(globalEdgeList, initGlobalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems, cudaMemcpyHostToDevice);
 
     std::cout << "Nb of subproblems: " << nbSubproblems << std::endl;
 
-    for (int i=0; i<nbSubproblems; i++) {
-        parDeTri<<<1, 1>>>(pointsOnGPU, edgePathsList, globalEdgeList, triangleList, nbPoints, nbSubproblems, NB_MAX_TRIANGLES, i);
-        cudaDeviceSynchronize();
-    }
-    
+    parDeTri<<<nbSubproblems, 1>>>(pointsOnGPU, edgePathsList, globalEdgeList, triangleList, nbPoints, nbSubproblems, nbMaxTrianglesUsed);
     cudaDeviceSynchronize();
 
-    cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyDeviceToHost);
-    
-    for (int i = 0; i < nbSubproblems*NB_MAX_TRIANGLES; i++){
-        std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].y << " " << initTriangleList[i].z << std::endl;
-    }
+    cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*nbMaxTrianglesUsed, cudaMemcpyDeviceToHost);
 
-    writeFile(initTriangleList, NB_MAX_TRIANGLES, nbSubproblems);
+    auto elapse = std::chrono::system_clock::now() - start;
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
+    std::cout << "Total duration : " << duration.count() << std::endl;
+
+    writeFile(initTriangleList, nbMaxTrianglesUsed, nbSubproblems);
 
     cudaFree(pointsOnGPU);
     cudaFree(edgePathsList);
     cudaFree(triangleList);
     cudaFree(globalEdgeList);
+    delete[] initTriangleList;
+    delete[] initGlobalEdgeList;
 
     return 0;
 }
@@ -160,6 +164,7 @@ int main(int argc, char *argv[]) {
 // auto start = high_resolution_clock::now();
 // auto elapse = std::chrono::system_clock::now() - start;
 // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(elapse);
+// std::cout << duration.count() << std::endl;
 
 // GPU time
 // cudaEvent_t myEvent, laterEvent;
