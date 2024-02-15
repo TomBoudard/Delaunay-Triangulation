@@ -13,7 +13,7 @@
 using namespace std::chrono;
 
 #define NB_MAX_TRIANGLES 200
-#define THRESHOLD 10 // TODO WHICH VALUE?
+#define THRESHOLD 8 // TODO WHICH VALUE?
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
