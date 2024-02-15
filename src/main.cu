@@ -11,7 +11,7 @@
 
 using namespace std::chrono;
 
-#define THRESHOLD 25 // TODO WHICH VALUE?
+#define THRESHOLD 25 // Manually defined threshold. Could be better.
 
 // For a subproblem of n points, we put a limit of 10*n triangles generated.
 // This is manually fixed because otherwise it would not have any limit and we have limited memory.
