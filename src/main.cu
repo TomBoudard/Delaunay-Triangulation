@@ -11,8 +11,8 @@
 
 using namespace std::chrono;
 
-#define NB_MAX_TRIANGLES 10
-#define THRESHOLD 5 // TODO WHICH VALUE?
+#define NB_MAX_TRIANGLES 200
+#define THRESHOLD 8 // TODO WHICH VALUE?
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
@@ -54,6 +54,24 @@ std::vector<float3> readFile(std::string nameFile){
     
 }
 
+void writeFile(int3* triangleList, int lineSize, int nbLines){
+    std::ofstream indexFile("../data/indexOutput.txt");
+
+    for (int i = 0; i < nbLines; i++){
+        for(int j = 0; j < lineSize; j++){
+            if (triangleList[i*lineSize+j].x < 0)
+                break;
+            indexFile <<  triangleList[i*lineSize+j].x;
+            indexFile <<  " ";
+            indexFile <<  triangleList[i*lineSize+j].y;
+            indexFile <<  " ";
+            indexFile <<  triangleList[i*lineSize+j].z;
+            indexFile << std::endl;
+        }
+    }
+    indexFile.close();
+}
+
 int main(int argc, char *argv[]) {
 
     // arguments reading and errors (filename)
@@ -89,12 +107,6 @@ int main(int argc, char *argv[]) {
     int3* triangleList;
     int3 initTriangleList[nbSubproblems*NB_MAX_TRIANGLES];
 
-    for (int i = 0; i < nbSubproblems; i++){
-        for (int j = 0; j < NB_MAX_TRIANGLES; j++){
-            initTriangleList[i*NB_MAX_TRIANGLES + j] = make_int3(-1, -1, -1);
-        }
-    }
-
     struct edge* globalEdgeList;
     int boundMaxEdgePerSubset = (int)(2*nbPoints/nbSubproblems - 2)*3*3;
     edge initGlobalEdgeList[boundMaxEdgePerSubset*nbSubproblems];
@@ -112,13 +124,15 @@ int main(int argc, char *argv[]) {
     std::cout << "Nb of subproblems: " << nbSubproblems << std::endl;
 
     parDeTri<<<nbSubproblems, 1>>>(pointsOnGPU, edgePathsList, globalEdgeList, triangleList, nbPoints, nbSubproblems, NB_MAX_TRIANGLES);
-    // cudaDeviceSynchronize(); //TODO Required or not ?
+    cudaDeviceSynchronize();
 
     cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyDeviceToHost);
     
     for (int i = 0; i < nbSubproblems*NB_MAX_TRIANGLES; i++){
         std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].y << " " << initTriangleList[i].z << std::endl;
     }
+
+    writeFile(initTriangleList, NB_MAX_TRIANGLES, nbSubproblems);
 
     cudaFree(edgePathsList);
     cudaFree(pointsOnGPU);

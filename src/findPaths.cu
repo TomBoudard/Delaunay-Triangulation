@@ -231,22 +231,22 @@ struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int lo
         cudaDeviceSynchronize();
     }
 
-    // // DEBUG PRINT PATHS
-    // struct edge p[nbPoints * log2nbSubproblems];
-    // cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
-    // for (int i = 0; i < log2nbSubproblems; i++) {
-    //     for (int j = 0; j < nbPoints; j++) {
-    //         edge e = p[i*nbPoints + j];
-    //         if (e.usage == UNUSED) {
-    //             std::cout << "[" << *(int *) &(e.x.z) << " (" << e.x.x << ", " << e.x.y << "), " << *(int *) &(e.y.z) << " (" << e.y.x << ", " << e.y.y << ") " << "]";
-    //         } else if (e.usage == INVALID) {
-    //             std::cout << "|";
-    //         } else {
-    //             std::cout << ".";
-    //         }
-    //     }
-    //     std::cout << std::endl;
-    // }
+    // DEBUG PRINT PATHS
+    struct edge p[nbPoints * log2nbSubproblems];
+    cudaMemcpy(p, paths, nbPoints * log2nbSubproblems * sizeof(struct edge), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < log2nbSubproblems; i++) {
+        for (int j = 0; j < nbPoints; j++) {
+            edge e = p[i*nbPoints + j];
+            if (e.usage == UNUSED) {
+                std::cout << "[" << *(int *) &(e.x.z) << " (" << e.x.x << ", " << e.x.y << "), " << *(int *) &(e.y.z) << " (" << e.y.x << ", " << e.y.y << ") " << "]";
+            } else if (e.usage == INVALID) {
+                std::cout << "|";
+            } else {
+                std::cout << ".";
+            }
+        }
+        std::cout << std::endl;
+    }
 
     cudaFree(buffers);
     return paths;
