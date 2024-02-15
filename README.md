@@ -36,7 +36,7 @@ Usage can be found with the help argument (`-h` or `--help`).
 
 ## Triangulation
 
-Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main input_file`.
+Create a build folder and execute `cmake ..` to generate files used for the algorithm. Then `make` and run `./main input_file`. The output file `indexOutput.txt` is generated in the current folder.
 
 ## Visualization
 

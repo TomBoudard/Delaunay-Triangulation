@@ -12,8 +12,8 @@
 
 using namespace std::chrono;
 
-#define NB_MAX_TRIANGLES 10
-#define THRESHOLD 5 // TODO WHICH VALUE?
+#define NB_MAX_TRIANGLES 200
+#define THRESHOLD 10 // TODO WHICH VALUE?
 
 //CPU Compare function
 bool xCompare (float3 a, float3 b){return a.x < b.x;}
@@ -43,7 +43,7 @@ std::vector<float3> readFile(std::string nameFile){
         long unsigned int hashValue = hash(x, y);
         if (!pointsSet.count(hashValue)) {
             pointsSet.insert(hashValue);
-            pointsVector.push_back({x, y, * (float *) &i});
+            pointsVector.push_back(make_float3(x, y, * (float *) &i));
             i++;
         }
     }
@@ -53,6 +53,24 @@ std::vector<float3> readFile(std::string nameFile){
 
     return pointsVector;
     
+}
+
+void writeFile(int3* triangleList, int lineSize, int nbLines){
+    std::ofstream indexFile("indexOutput.txt");
+
+    for (int i = 0; i < nbLines; i++){
+        for(int j = 0; j < lineSize; j++){
+            if (triangleList[i*lineSize+j].x < 0)
+                break;
+            indexFile <<  triangleList[i*lineSize+j].x;
+            indexFile <<  " ";
+            indexFile <<  triangleList[i*lineSize+j].y;
+            indexFile <<  " ";
+            indexFile <<  triangleList[i*lineSize+j].z;
+            indexFile << std::endl;
+        }
+    }
+    indexFile.close();
 }
 
 int main(int argc, char *argv[]) {
@@ -83,56 +101,57 @@ int main(int argc, char *argv[]) {
 
     // Find the number of subproblems according to the threshold of the
     // maximum number of points per subproblems. This number is always a power of 2
+
+    // The way we have done our algorithm requires at least one split
+    // To split the problem, the threshold is lowered if it is necesary
+    int thresholdUsed = min(nbPoints-1, THRESHOLD);
+
     int nbSubproblems = 1, log2nbSubproblems = 0;
-    while ((nbSubproblems * THRESHOLD) < nbPoints) {
+    while ((nbSubproblems * thresholdUsed) < nbPoints) {
         log2nbSubproblems++;
         nbSubproblems <<= 1;
     }
 
     struct edge* edgePathsList = createPaths(pointsOnGPU, nbPoints, nbSubproblems, log2nbSubproblems);
-    cudaFree(edgePathsList);
 
-    cudaMemcpy(&pointsVector[0], pointsOnGPU, mem, cudaMemcpyDeviceToHost);
-    for (int i=0; i<9; i++) std::cout << pointsVector[i].x << " " << pointsVector[i].y << std::endl;
+    int3* triangleList;
+    int3 initTriangleList[nbSubproblems*NB_MAX_TRIANGLES];
 
-    // int3* triangleList;
-    // int3 initTriangleList[nbSubproblems*NB_MAX_TRIANGLES];
+    struct edge* globalEdgeList;
+    int boundMaxEdgePerSubset = (int)(2*nbPoints/nbSubproblems - 2)*3*3;
+    edge initGlobalEdgeList[boundMaxEdgePerSubset*nbSubproblems];
 
-    // // TODO clean memset
-    // for (int i = 0; i < nbSubproblems; i++){
-    //     for (int j = 0; j < NB_MAX_TRIANGLES; j++){
-    //         initTriangleList[i*NB_MAX_TRIANGLES + j] = make_int3(-1, -1, -1);
-    //     }
-    // }
+    for (int i = 0; i < boundMaxEdgePerSubset*nbSubproblems; i++){
+        initGlobalEdgeList[i].usage = UNUSED;
+    }
 
-    // struct edge* globalEdgeList;
-    // int boundMaxEdgePerSubset = (int)(2*nbPoints/nbSubproblems - 2)*3*3;
-    // edge initGlobalEdgeList[boundMaxEdgePerSubset*nbSubproblems];
+    cudaMalloc((void**)&triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES); // FIXME Stored contiguously
+    cudaMemcpy(triangleList, initTriangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyHostToDevice);
 
-    // for (int i = 0; i < boundMaxEdgePerSubset*nbSubproblems; i++){
-    //     initGlobalEdgeList[i] = {make_float3(0, 0, 0), make_float3(0, 0, 0), UNUSED};
-    // }
+    cudaMalloc((void**)&globalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems);
+    cudaMemcpy(globalEdgeList, initGlobalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems, cudaMemcpyHostToDevice);
 
-    // cudaMalloc((void**)&triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES); // FIXME Stored contiguously
-    // cudaMemcpy(triangleList, initTriangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyHostToDevice);
+    std::cout << "Nb of subproblems: " << nbSubproblems << std::endl;
 
-    // cudaMalloc((void**)&globalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems);
-    // cudaMemcpy(globalEdgeList, initGlobalEdgeList, sizeof(edge)*boundMaxEdgePerSubset*nbSubproblems, cudaMemcpyHostToDevice);
-
-    // std::cout << "Nb of subproblems: " << nbSubproblems << std::endl;
-
-    // parDeTri<<<nbSubproblems, 1>>>(pointsOnGPU, edgePathsList, globalEdgeList, triangleList, nbPoints, nbSubproblems, NB_MAX_TRIANGLES);
-    // // cudaDeviceSynchronize(); //TODO Required or not ?
-
-    // cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyDeviceToHost);
+    for (int i=0; i<nbSubproblems; i++) {
+        parDeTri<<<1, 1>>>(pointsOnGPU, edgePathsList, globalEdgeList, triangleList, nbPoints, nbSubproblems, NB_MAX_TRIANGLES, i);
+        cudaDeviceSynchronize();
+    }
     
-    // for (int i = 0; i < nbSubproblems*NB_MAX_TRIANGLES; i++){
-    //     std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].y << " " << initTriangleList[i].z << std::endl;
-    // }
+    cudaDeviceSynchronize();
 
-    // cudaFree(edgePathsList);
-    // cudaFree(pointsOnGPU);
-    // cudaFree(globalEdgeList);
+    cudaMemcpy(initTriangleList, triangleList, sizeof(int3)*nbSubproblems*NB_MAX_TRIANGLES, cudaMemcpyDeviceToHost);
+    
+    for (int i = 0; i < nbSubproblems*NB_MAX_TRIANGLES; i++){
+        std::cout << "Triangle : " << initTriangleList[i].x << " " << initTriangleList[i].y << " " << initTriangleList[i].z << std::endl;
+    }
+
+    writeFile(initTriangleList, NB_MAX_TRIANGLES, nbSubproblems);
+
+    cudaFree(pointsOnGPU);
+    cudaFree(edgePathsList);
+    cudaFree(triangleList);
+    cudaFree(globalEdgeList);
 
     return 0;
 }

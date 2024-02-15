@@ -55,7 +55,7 @@ def render_svg(coords, trig):
             o.write(add_trig(trig, width/200)) # Adding triangle
         
         # for trig in trig_list:
-            # o.write(add_circle(trig, width/200)) # Adding circle
+        #     o.write(add_circle(trig, width/200)) # Adding circle
         
         # End of image
         o.write(f"</svg>\n")
