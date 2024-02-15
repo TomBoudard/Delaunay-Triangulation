@@ -30,27 +30,13 @@ __device__ float delaunayDistance(float3 const& edgeStart, float3 const& edgeEnd
 
 __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeList, int3* triangleList, int nbPoints, int nbSubproblems, int nbMaxTriangle){
     
-    //printf("TEST START !\n");
-
     // IDs of the beginning and end of the slice manipulated by the block
     int sliceBlockBeg = (blockIdx.x) * nbPoints / (nbSubproblems);
     int sliceBlockEnd = ((blockIdx.x + 1)) * nbPoints / (nbSubproblems);
 
-    float mostLeftX = points[sliceBlockBeg].x;
-    float mostRightX = points[sliceBlockEnd].x;
-
-    int idLeft = ((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx) - 1) - 1)*nbPoints;
-    idLeft += fakeBlockIdx%((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx) - 1))*nbPoints/(1<<((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx) - 1) - 1));
-    int idRight = ((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1) - 1)*nbPoints;
-    idRight += fakeBlockIdx%((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1))*nbPoints/(1<<((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1) - 1));
-    
-    printf("TEST ID LEFT = %d \n", ((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx) - 1) - 1));
-    printf("TEST ID Right = %d\n", ((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1) - 1));
-    printf("%d \n",(fakeBlockIdx+1)%((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1)));
-    printf("%d \n",((int)log2((double)nbSubproblems) - (__ffs(fakeBlockIdx + 1) - 1)));
-
     int log2nbSubproblems = __ffs(nbSubproblems) - 1;
 
+    // Compute the ids of the (at most) two path(s)
     int idLeftRow = (log2nbSubproblems - (__ffs(blockIdx.x)));
     int idLeftCol = (blockIdx.x - (1 << (log2nbSubproblems - idLeftRow-1))) / (1 << (log2nbSubproblems - idLeftRow)) * nbPoints / (1 << idLeftRow);
     int idRightRow = (log2nbSubproblems - (__ffs(blockIdx.x + 1)));
@@ -66,7 +52,6 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
         while (edgePathList[idLeft].usage != INVALID){
             globalEdgeList[copyIndex] = edgePathList[idLeft];
             globalEdgeList[copyIndex].usage = UNUSED_LEFT;
-            printf("PATH POINT %f %f %d -> %f %f %d \n", edgePathList[idLeft].x.x, edgePathList[idLeft].x.y, *(int*)& edgePathList[idLeft].x.z, edgePathList[idLeft].y.x, edgePathList[idLeft].y.y, *(int*)& edgePathList[idLeft].y.z);
             idLeft++;
             copyIndex++;
         }
@@ -75,14 +60,10 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
         while (edgePathList[idRight].usage != INVALID){
             globalEdgeList[copyIndex] = edgePathList[idRight];
             globalEdgeList[copyIndex].usage = UNUSED_RIGHT;
-            printf("PATH POINT %f %f %d -> %f %f %d \n", edgePathList[idRight].x.x, edgePathList[idRight].x.y, *(int*)& edgePathList[idRight].x.z, edgePathList[idRight].y.x, edgePathList[idRight].y.y, *(int*)& edgePathList[idRight].y.z);
             idRight++;
             copyIndex++;
         }
     }
-
-    //printf("Block N°%d | THIS BLOCK HAS A NUMBER OF LEFT AND RIGHT NEIGHBOURS OF: %d and %d\n",blockIdx.x, nbLeftNeighbours, nbRightNeighbours);
-
 
     int triangleIndex = (blockIdx.x)*nbMaxTriangle;
 
@@ -90,20 +71,14 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
     int startEdgeIndex = initialStartEdgeIndex;
     int endEdgeIndex = copyIndex;
 
-    //printf("Block N°%d | INDEX PRINT: Start Index : %d End Index : %d Delta Index : %d \n", blockIdx.x, startEdgeIndex, endEdgeIndex, copyIndex);
-
     edge currentEdge;
     float3 bestThirdPoint;
     int bestThirdPointSide;
 
-    //printf("TEST TRIANGULATION BEGIN !\n");
-
     //Triangulation
-    while (startEdgeIndex < endEdgeIndex){
+    while (startEdgeIndex < endEdgeIndex){ //Sliding window
 
         currentEdge = globalEdgeList[startEdgeIndex];
-
-        //printf("Block N°%d | Current edge used: %d -> %d \n",blockIdx.x, *(int*)& currentEdge.x.z, *(int*)& currentEdge.y.z);
 
         float bestRadius = INFINITY;
         bool triangleFound = false;
@@ -118,6 +93,7 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
             else{
                 testPoint = globalEdgeList[i-sliceBlockEnd+initialStartEdgeIndex].x;
             }
+            
             float3 firstVector = currentEdge.y - currentEdge.x;
             float3 secondVector = testPoint - currentEdge.x;
             float zVectorialProduct = firstVector.x*secondVector.y - firstVector.y*secondVector.x;
@@ -136,7 +112,7 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
                     
                 float radius = delaunayDistance(currentEdge.x, currentEdge.y, testPoint);
                 if (radius < bestRadius){
-                    int3 currentTriangle = make_int3(currentEdge.x.z, currentEdge.y.z, points[i].z);
+                    int3 currentTriangle = make_int3(currentEdge.x.z, currentEdge.y.z, testPoint.z);
                     bool alreadyExisting = false;
                     for (int j = blockIdx.x * nbMaxTriangle; j<triangleIndex; j++){
                         if (currentTriangle == triangleList[j]){
@@ -155,10 +131,8 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
 
         if (triangleFound){
             
-            //printf("Block N°%d | TEST TRIANGLE FOUND : EDGE (%d %d (usage = %d)) with POINT (%d) !\n", blockIdx.x, *(int*)& currentEdge.x.z, *(int*)& currentEdge.y.z, *(int*)& currentEdge.usage, *(int*)& bestThirdPoint.z);
-
             bool validTriangle = true;
-            if (bestThirdPointSide == -1){//Means that the current edge is being used from y to x to be used in a direct repere
+            if (bestThirdPointSide == -1){ //Means that the current edge must be used from y to x to be used in a direct repere
                 float3 temp = currentEdge.x;
                 currentEdge.x = currentEdge.y;
                 currentEdge.y = temp;
@@ -167,9 +141,9 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
             edge thirdEdge = {bestThirdPoint, currentEdge.x, 0};
             bool secondEdgeNew = true;
             bool thirdEdgeNew = true;
-            int indexSecondEdge = -1; //TODO To optimize
+            int indexSecondEdge = -1;
             int indexThirdEdge = -1;
-            for (int k = initialStartEdgeIndex; k<=endEdgeIndex; k++){ // TODO To optimize if possible
+            for (int k = initialStartEdgeIndex; k<=endEdgeIndex; k++){
                 if (secondEdge == globalEdgeList[k]){
                     secondEdgeNew = false;
                     secondEdge = globalEdgeList[k];
@@ -182,16 +156,11 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
                 }
             }
 
-            //printf("Block N°%d | TEST TEST \n", blockIdx.x);
-
-            //The case where the edge has two points on the same side is not possible here otherwise the bestThirdPoint wouldn't have been choosen
-
             //Add the two side edges only if they are new (the first one is always preexisting)
             if (secondEdgeNew){
                 secondEdge.usage = USED; //New edges are created according to a direct repere 
                 globalEdgeList[endEdgeIndex] = secondEdge;
                 endEdgeIndex++;
-                //printf("Block N°%d | NEW SECOND EDGE : %d -> %d \n", blockIdx.x, *(int*)& secondEdge.x.z, *(int*)& secondEdge.y.z);
             }
             else{
                 float3 firstVectorSecondEdge = secondEdge.y-secondEdge.x;
@@ -201,7 +170,7 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
                     validTriangle = false;
                 }
                 else{
-                    secondEdge.usage = FULL;
+                    secondEdge.usage = FULL; // The use of a preexisting edge necessarily make it used twice (on both sides) or an edge of the path can be used only once in a subproblem
                     globalEdgeList[indexSecondEdge].usage = secondEdge.usage;
                 }
             }
@@ -210,29 +179,27 @@ __global__ void parDeTri(float3* points, edge* edgePathList, edge* globalEdgeLis
                 thirdEdge.usage = USED; //New edges are created according to a direct repere 
                 globalEdgeList[endEdgeIndex] = thirdEdge;
                 endEdgeIndex++;
-                //printf("Block N°%d | NEW THIRD EDGE : %d -> %d \n", blockIdx.x, *(int*)& thirdEdge.x.z, *(int*)& thirdEdge.y.z);
             }
             else{
                 float3 firstVectorThirdEdge = thirdEdge.y-thirdEdge.x;
                 float3 secondVectorThirdEdge = currentEdge.y-bestThirdPoint;
                 float zVectorialProductThirdEdge = firstVectorThirdEdge.x*secondVectorThirdEdge.y - firstVectorThirdEdge.y*secondVectorThirdEdge.x;
-                if (zVectorialProductThirdEdge == 1 || thirdEdge.usage == FULL){ //If they have the same sign
+                if (zVectorialProductThirdEdge == 1 || thirdEdge.usage == FULL){ //If used in the same way as created or already used twice
                     validTriangle = false;
                 }
                 else{
-                    thirdEdge.usage = FULL;
+                    thirdEdge.usage = FULL;  // The use of a preexisting edge necessarily make it used twice (on both sides) or an edge of the path can be used only once in a subproblem
                     globalEdgeList[indexThirdEdge].usage = thirdEdge.usage;
                 }
             }
 
             if(validTriangle){
-                currentEdge.usage = FULL;
+                currentEdge.usage = FULL; // The use of a preexisting edge necessarily make it used twice (on both sides) or an edge of the path can be used only once in a subproblem
                 globalEdgeList[startEdgeIndex].usage = currentEdge.usage;
 
                 triangleList[triangleIndex].x = *(int*)& currentEdge.x.z;
                 triangleList[triangleIndex].y = *(int*)& currentEdge.y.z;
                 triangleList[triangleIndex].z = *(int*)& bestThirdPoint.z;
-                //printf("STORE TRIANGLE : %d %d %d\n", triangleList[triangleIndex].x, triangleList[triangleIndex].y, triangleList[triangleIndex].z);
                 triangleIndex++;
                 triangleList[triangleIndex].x = -1;
 
