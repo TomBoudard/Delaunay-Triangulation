@@ -1,6 +1,7 @@
 #include "tools.cu"
+#include "helper_cuda.cu"
 
-#define NB_MAX_THREADS 1024 // TODO SHOULD BE POWER OF 2
+#define NB_MAX_THREADS_PER_BLOCK 1024 // THIS IS CUDA MAX THREADS PER BLOCK
 
 // Macro to compare polar angle between (A and ref) and (B and ref)
 #define biggerPolarAngle(A, B, ref) atan2(A.x - ref.x, A.y - ref.y) > atan2(B.x - ref.x, B.y - ref.y)
@@ -205,7 +206,10 @@ __global__ void projectSlice(float3 *points, float3 *buffers, struct edge *paths
 
 struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int log2nbSubproblems) {
 
-    std::cout << "nb & log2 " << nbSubproblems << " " << log2nbSubproblems << std::endl;
+    // Find the number of cores of the device
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, 0);
+    uint nbCores = deviceProp.multiProcessorCount * _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor);
 
     // Create an array to store every paths.
     struct edge* paths;   // log2(nbSubproblems) * nbPoints Array containing every edges.
@@ -221,15 +225,35 @@ struct edge* createPaths(float3 *points, int nbPoints, int nbSubproblems, int lo
     float3* buffers;
     cudaMalloc((void **)&buffers, 3 * nbPoints * sizeof(float3));
 
+    // cudaEvent_t myEvent, laterEvent;
+    // cudaEventCreate(&myEvent);
+    // cudaEventRecord(myEvent, 0);
+    // cudaEventSynchronize(myEvent);
+
     // Recursively find a path and cut into two subproblems
     for(int i=0, nbBlocks=1; nbBlocks < nbSubproblems; i++, nbBlocks<<= 1) {
-        int nbThreads = NB_MAX_THREADS/nbBlocks; // Every block can be done in parallel
-        if (nbThreads < 1) nbThreads = 1;
+        int nbThreadsMax = nbCores/nbBlocks; // Every block should be done in parallel
+        // Number of threads should be between 1 and 1024 and be a power of 2 because of merging steps
+        nbThreadsMax = max(1, min(NB_MAX_THREADS_PER_BLOCK, nbThreadsMax));
+
+        // nbThreads is the biggest power of two such that is it below or equal to the max
+        int nbThreads = 1;
+        while (2*nbThreads <= nbThreadsMax) {
+            nbThreads <<= 1;
+        }
 
         // Project the complete array. "points" is read-only
         projectSlice<<<nbBlocks, nbThreads>>>(points, buffers, &paths[nbPoints * i], nbPoints, i);
         cudaDeviceSynchronize();
     }
+
+    // cudaEventCreate(&laterEvent);
+    // cudaEventRecord(laterEvent, 0);
+    // cudaEventSynchronize(laterEvent);
+    // float res;
+    // cudaEventElapsedTime(&res, myEvent, laterEvent);
+    // std::cout << res << std::endl;
+
 
     // // DEBUG PRINT PATHS
     // struct edge p[nbPoints * log2nbSubproblems];
